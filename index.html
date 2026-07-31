@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>인플루언서 콘텐츠 초안 매니저</title>
+  <!-- React & Tailwind CSS CDN Load -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase SDK (Cloud Firestore) Load -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 sm:p-6 text-gray-800">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Firebase 초기화
+    const firebaseConfig = {
+      apiKey: "AIzaSyD38PlIfxBCv8xEALFa8beeFxT0q7PMXTA",
+      authDomain: "planfairy.firebaseapp.com",
+      projectId: "planfairy",
+      storageBucket: "planfairy.firebasestorage.app",
+      messagingSenderId: "835649965679",
+      appId: "1:835649965679:web:27a83d28692bc807aac79a"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    const initialFormState = {
+      storeName: '',
+      titleKeyword: '',
+      bodyKeyword: '',
+      requestNote: '',
+      productName: '',
+      bodySource: '',
+      hashtags: '',
+      link: '',
+      location: '',
+      operatingHours: '',
+      storeIntro: '',
+      directions: '',
+      parking: '',
+      reservation: '',
+      menu: '',
+      purpose: '',
+      parkingInfo: '',
+      roomType: '',
+      amenities: ''
+    };
+
+    const getTodayString = () => {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const mzComments = {
+      fixed: '맛집, 문화 리뷰어 계획요정이라고 합니다! 소통해요 ❤',
+      muk8: [
+        '피드 피지컬 미쳤네요 🤤 맛있는 거 공유하면서 찐하게 먹8하고 소통해요 ✨',
+        '맛도리 피드 탐방하다가 홀린 듯 들어옴 ㅋㅋㅋ 저랑 먹8하고 맞팔 소통해요! 🤝',
+        '비주얼 사기네요 🔥 맛집에 진심인 편이라 먼저 선팔 찍고 갑니다 찐하게 먹8 소통해요 🤤',
+        '아 피드 보다가 침 흘릴 뻔 🫠 같이 맛있는 거 정보 공유하면서 먹8 소통해요 ✨',
+        '맛잘알 냄새 솔솔 나서 지나칠 수가 없었음 ㅋ 당장 선팔 누르고 가요 먹8 소통해요! 🔥'
+      ],
+      restaurant: [
+        '아 미쳤다... 화면 넘어 맛있는 냄새 나는 것 같아요 🤤 진심 배고파서 현기증 남',
+        '여기 저장해두고 조만간 부수러 갑니다... 비주얼 진짜 사기네요 🔥',
+        '맛집 탐지기 성능 미쳤다 ㅋㅋㅋ 내 입으로 당장 수송 완료하고 싶음 ㅠㅠ',
+        '아니 사장님 비주얼 무슨 일임?🫠 당장 내 입으로 직행시켜야 함 ㅋㅋㅋ',
+        '솔직히 이건 안 가보면 손해임 ㅋ 지도에 핀 찍어두고 약속 장소로 확정 완 ✨'
+      ],
+      mood: [
+        '분위기 뭔데 진짜... 감성 한 스푼에 도파민 터짐 ✨ 찍으면 다 인생샷각 아니냐구',
+        '공간 감성 미쳤네요... 사장님 인테리어에 영혼 갈아 넣으신 듯 ☕️',
+        '여기 가면 인스타 업로드 최소 5개 가능 ㅋ 분위기 맛집 인정입니다',
+        '여기가 바로 내 도파민 충전소인가...✨ 비주얼부터 합격 목걸이 수여합니다',
+        '분위기 미쳐서 저장 누르다가 화면 뚫릴 뻔함 ㅋㅋㅋ 조만간 갑니다 🔥'
+      ],
+      date: [
+        '와 뷰 무슨 일... 이번 주말 데이트 코스 이걸로 종결합니다 힐링 그 자체 🔥',
+        '여기 체크인하자마자 극락 예약이네요... 당장 짐 싸서 가고 싶음 🥺',
+        '데이트 코스 고민 끝! 태그해서 끌고 갈 사람 구함 ㅋㅋㅋ 너무 완벽하잖아',
+        '여기 예약하는 사람 최소 센스 천재 소리 듣는다 ㅋ 찜해둡니다 ✨',
+        '힐링 그 자체네요... 당장 주말에 스케줄 비우고 달려가야 할 비주얼 🌿'
+      ]
+    };
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('editor');
+      const [platform, setPlatform] = useState('blog');
+      const [category, setCategory] = useState('product');
+
+      const [listFilter, setListFilter] = useState('all');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [savedPosts, setSavedPosts] = useState([]);
+
+      const [formData, setFormData] = useState(initialFormState);
+      const [generatedResult, setGeneratedResult] = useState('');
+      const [lastAutoSaveTime, setLastAutoSaveTime] = useState('');
+
+      // 👥 팔로우 관리 관련 State
+      const [followList, setFollowList] = useState([]);
+      const [followUsernameInput, setFollowUsernameInput] = useState('');
+      const [followDateInput, setFollowDateInput] = useState(getTodayString());
+      const [sortOrder, setSortOrder] = useState('oldest');
+      const [clickedIds, setClickedIds] = useState([]);
+
+      // 내 계정 수치
+      const [myUsername, setMyUsername] = useState('');
+      const [followersCount, setFollowersCount] = useState('');
+      const [followingCount, setFollowingCount] = useState('');
+      const [isEditingStats, setIsEditingStats] = useState(false);
+
+      // ✍️ 인스타 캡션 관련 State
+      const [captionList, setCaptionList] = useState([]);
+      const [captionSearchQuery, setCaptionSearchQuery] = useState('');
+      const [newCaptionStore, setNewCaptionStore] = useState('');
+      const [newCaptionText, setNewCaptionText] = useState('');
+      const [newCaptionTags, setNewCaptionTags] = useState('');
+
+      // 📸 레퍼런스 관련 State
+      const [references, setReferences] = useState([]);
+      const [refImageUrlInput, setRefImageUrlInput] = useState('');
+      const [refNoteInput, setRefNoteInput] = useState('');
+      const [selectedRef, setSelectedRef] = useState(null);
+
+      const [hasLocalData, setHasLocalData] = useState(false);
+
+      const [editableComments, setEditableComments] = useState({
+        fixed: mzComments.fixed,
+        muk8: '',
+        restaurant: '',
+        mood: '',
+        date: ''
+      });
+
+      useEffect(() => {
+        const hasPosts = !!localStorage.getItem('BLOG_MANAGER_SAVED_POSTS');
+        const hasFollows = !!localStorage.getItem('INSTA_FOLLOW_TRACKER_LIST');
+        const hasRefs = !!localStorage.getItem('INSTA_FEED_REFERENCES');
+        if (hasPosts || hasFollows || hasRefs) {
+          setHasLocalData(true);
+        }
+      }, []);
+
+      // 🔥 Firebase Cloud Firestore 실시간 구독
+      useEffect(() => {
+        setEditableComments({
+          fixed: mzComments.fixed,
+          muk8: mzComments.muk8[Math.floor(Math.random() * mzComments.muk8.length)],
+          restaurant: mzComments.restaurant[Math.floor(Math.random() * mzComments.restaurant.length)],
+          mood: mzComments.mood[Math.floor(Math.random() * mzComments.mood.length)],
+          date: mzComments.date[Math.floor(Math.random() * mzComments.date.length)]
+        });
+
+        // 1. 저장된 초안 목록
+        const unsubPosts = db.collection('savedPosts').orderBy('id', 'desc').onSnapshot(snapshot => {
+          setSavedPosts(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        // 2. 인스타 캡션 목록
+        const unsubCaptions = db.collection('instaCaptions').orderBy('id', 'desc').onSnapshot(snapshot => {
+          setCaptionList(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        // 3. 팔로우 리스트
+        const unsubFollows = db.collection('followList').onSnapshot(snapshot => {
+          setFollowList(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        // 4. 클릭 상태
+        const unsubClicked = db.collection('appStats').doc('clickedIds').onSnapshot(doc => {
+          if (doc.exists) setClickedIds(doc.data().ids || []);
+        });
+
+        // 5. 내 현황 수치
+        const unsubStats = db.collection('appStats').doc('myStats').onSnapshot(doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            setMyUsername(data.myUsername || '');
+            setFollowersCount(data.followersCount || '');
+            setFollowingCount(data.followingCount || '');
+          }
+        });
+
+        // 6. 피드 레퍼런스
+        const unsubRefs = db.collection('references').onSnapshot(snapshot => {
+          setReferences(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        return () => {
+          unsubPosts();
+          unsubCaptions();
+          unsubFollows();
+          unsubClicked();
+          unsubStats();
+          unsubRefs();
+        };
+      }, []);
+
+      const migrateLocalDataToCloud = async () => {
+        if (!confirm('기존 노트북에 저장된 데이터를 구글 클라우드로 한 번에 옮기시겠습니까?')) return;
+
+        try {
+          const localPosts = JSON.parse(localStorage.getItem('BLOG_MANAGER_SAVED_POSTS') || '[]');
+          for (const item of localPosts) await db.collection('savedPosts').doc(String(item.id)).set(item);
+
+          const localFollows = JSON.parse(localStorage.getItem('INSTA_FOLLOW_TRACKER_LIST') || '[]');
+          for (const item of localFollows) await db.collection('followList').doc(String(item.id)).set(item);
+
+          const localClicked = JSON.parse(localStorage.getItem('INSTA_FOLLOW_CLICKED_IDS') || '[]');
+          await db.collection('appStats').doc('clickedIds').set({ ids: localClicked });
+
+          const localStats = JSON.parse(localStorage.getItem('INSTA_FOLLOW_STATS') || '{}');
+          await db.collection('appStats').doc('myStats').set(localStats);
+
+          const localRefs = JSON.parse(localStorage.getItem('INSTA_FEED_REFERENCES') || '[]');
+          for (const item of localRefs) await db.collection('references').doc(String(item.id)).set(item);
+
+          localStorage.removeItem('BLOG_MANAGER_SAVED_POSTS');
+          localStorage.removeItem('INSTA_FOLLOW_TRACKER_LIST');
+          localStorage.removeItem('INSTA_FOLLOW_CLICKED_IDS');
+          localStorage.removeItem('INSTA_FOLLOW_STATS');
+          localStorage.removeItem('INSTA_FEED_REFERENCES');
+
+          setHasLocalData(false);
+          alert('🎉 기존 노트북 데이터가 구글 클라우드로 안전하게 이관되었습니다!');
+        } catch (e) {
+          console.error('이관 실패:', e);
+          alert('데이터 이관 중 오류가 발생했습니다: ' + e.message);
+        }
+      };
+
+      // ✍️ 인스타 캡션 신규 저장
+      const handleAddCaption = async (e) => {
+        e.preventDefault();
+        if (!newCaptionStore.trim() && !newCaptionText.trim()) {
+          alert('상호명 또는 캡션 내용을 입력해 주세요.');
+          return;
+        }
+
+        const newItem = {
+          id: Date.now(),
+          storeName: newCaptionStore.trim() || '상호명 미지정',
+          captionText: newCaptionText,
+          captionTags: newCaptionTags,
+          date: getTodayString()
+        };
+
+        await db.collection('instaCaptions').doc(String(newItem.id)).set(newItem);
+
+        setNewCaptionStore('');
+        setNewCaptionText('');
+        setNewCaptionTags('');
+        alert('인스타 캡션이 추가되었습니다!');
+      };
+
+      const handleDeleteCaption = async (id) => {
+        if (confirm('이 캡션을 삭제하시겠습니까?')) {
+          await db.collection('instaCaptions').doc(String(id)).delete();
+        }
+      };
+
+      const handleUpdateCaption = async (id, updatedStore, updatedText, updatedTags) => {
+        await db.collection('instaCaptions').doc(String(id)).update({
+          storeName: updatedStore,
+          captionText: updatedText,
+          captionTags: updatedTags
+        });
+        alert('수정 내용이 저장되었습니다.');
+      };
+
+      const copyTextToClipboard = (text) => {
+        navigator.clipboard?.writeText(text);
+      };
+
+      // 📸 이미지 붙여넣기(Ctrl+V) 이벤트
+      useEffect(() => {
+        const handlePaste = (e) => {
+          if (activeTab !== 'reference') return;
+
+          const items = e.clipboardData?.items;
+          if (!items) return;
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.indexOf('image') !== -1) {
+              const file = item.getAsFile();
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = async (uploadEvent) => {
+                  const newItem = {
+                    id: Date.now() + Math.random().toString(),
+                    src: uploadEvent.target.result,
+                    note: refNoteInput.trim() || '클립보드 붙여넣기',
+                    date: getTodayString()
+                  };
+                  await db.collection('references').doc(String(newItem.id)).set(newItem);
+                };
+                reader.readAsDataURL(file);
+              }
+              break;
+            } else if (item.type === 'text/plain') {
+              item.getAsString(async text => {
+                if (text.startsWith('http://') || text.startsWith('https://') || text.startsWith('data:image')) {
+                  const newItem = {
+                    id: Date.now().toString(),
+                    src: text.trim(),
+                    note: refNoteInput.trim() || '링크 붙여넣기',
+                    date: getTodayString()
+                  };
+                  await db.collection('references').doc(String(newItem.id)).set(newItem);
+                }
+              });
+            }
+          }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+      }, [activeTab, refNoteInput]);
+
+      const formDataRef = useRef(formData);
+      const platformRef = useRef(platform);
+      const categoryRef = useRef(category);
+
+      useEffect(() => {
+        formDataRef.current = formData;
+        platformRef.current = platform;
+        categoryRef.current = category;
+      }, [formData, platform, category]);
+
+      useEffect(() => {
+        const interval = setInterval(() => {
+          const hasContent = Object.values(formDataRef.current).some(val => val.trim() !== '');
+          if (hasContent) {
+            const nowTime = new Date().toLocaleTimeString('ko-KR');
+            const draftData = {
+              formData: formDataRef.current,
+              platform: platformRef.current,
+              category: categoryRef.current,
+              savedAt: nowTime
+            };
+            try {
+              localStorage.setItem('BLOG_MANAGER_DRAFT_FORM', JSON.stringify(draftData));
+              setLastAutoSaveTime(nowTime);
+            } catch (e) {
+              console.error('자동저장 실패:', e);
+            }
+          }
+        }, 180000);
+
+        return () => clearInterval(interval);
+      }, []);
+
+      // 📸 레퍼런스 핸들러
+      const handleFileUpload = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        files.forEach(file => {
+          const reader = new FileReader();
+          reader.onload = async (uploadEvent) => {
+            const newItem = {
+              id: Date.now() + Math.random().toString(),
+              src: uploadEvent.target.result,
+              note: refNoteInput.trim(),
+              date: getTodayString()
+            };
+            await db.collection('references').doc(String(newItem.id)).set(newItem);
+          };
+          reader.readAsDataURL(file);
+        });
+
+        setRefNoteInput('');
+        e.target.value = '';
+      };
+
+      const handleAddUrlReference = async (e) => {
+        e.preventDefault();
+        if (!refImageUrlInput.trim()) {
+          alert('이미지 주소(URL)를 입력해 주세요.');
+          return;
+        }
+
+        const newItem = {
+          id: Date.now().toString(),
+          src: refImageUrlInput.trim(),
+          note: refNoteInput.trim(),
+          date: getTodayString()
+        };
+
+        await db.collection('references').doc(String(newItem.id)).set(newItem);
+        setRefImageUrlInput('');
+        setRefNoteInput('');
+      };
+
+      const handleDeleteReference = async (id) => {
+        if (confirm('이 레퍼런스 사진을 삭제하시겠습니까?')) {
+          await db.collection('references').doc(String(id)).delete();
+          if (selectedRef && selectedRef.id === id) {
+            setSelectedRef(null);
+          }
+        }
+      };
+
+      // 👥 팔로우 관리 핸들러
+      const saveStats = async () => {
+        const stats = { myUsername, followersCount, followingCount };
+        await db.collection('appStats').doc('myStats').set(stats);
+        setIsEditingStats(false);
+      };
+
+      const handleAddFollow = async (e) => {
+        if (e) e.preventDefault();
+
+        const trimmedUser = followUsernameInput.trim().replace('@', '');
+        const trimmedDate = followDateInput.trim();
+
+        if (!trimmedUser) {
+          alert('계정명을 입력해 주세요.');
+          return;
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(trimmedDate)) {
+          alert('날짜 형식을 YYYY-MM-DD에 맞춰 입력해 주세요. (예: 2026-03-01)');
+          return;
+        }
+
+        const newItem = {
+          id: Date.now().toString(),
+          username: trimmedUser,
+          url: `https://www.instagram.com/${trimmedUser}/`,
+          date: trimmedDate
+        };
+
+        await db.collection('followList').doc(String(newItem.id)).set(newItem);
+        setFollowUsernameInput('');
+      };
+
+      const handleDeleteFollow = async (id) => {
+        if (confirm('삭제하시겠습니까?')) {
+          await db.collection('followList').doc(String(id)).delete();
+          const updatedClicked = clickedIds.filter(cId => cId !== id);
+          await db.collection('appStats').doc('clickedIds').set({ ids: updatedClicked });
+        }
+      };
+
+      const handleDeleteDateGroup = async (targetDate, itemsInGroup) => {
+        if (confirm(`[${targetDate}] 날짜의 계정 ${itemsInGroup.length}개를 모두 삭제하시겠습니까?`)) {
+          const deletedIds = itemsInGroup.map(item => item.id);
+          for (const item of itemsInGroup) {
+            await db.collection('followList').doc(String(item.id)).delete();
+          }
+          const updatedClicked = clickedIds.filter(cId => !deletedIds.includes(cId));
+          await db.collection('appStats').doc('clickedIds').set({ ids: updatedClicked });
+        }
+      };
+
+      const handleEditFollowDate = async (item) => {
+        const newDate = prompt('수정할 날짜를 입력하세요 (YYYY-MM-DD):', item.date);
+        if (newDate) {
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(newDate.trim())) {
+            alert('날짜 형식이 올바르지 않습니다. (예: 2026-03-01)');
+            return;
+          }
+          await db.collection('followList').doc(String(item.id)).update({ date: newDate.trim() });
+        }
+      };
+
+      const copyUsernameAndMark = async (item) => {
+        navigator.clipboard?.writeText(item.username);
+        if (!clickedIds.includes(item.id)) {
+          const newClicked = [...clickedIds, item.id];
+          await db.collection('appStats').doc('clickedIds').set({ ids: newClicked });
+        }
+      };
+
+      const handleCommentChange = (key, value) => {
+        setEditableComments(prev => ({ ...prev, [key]: value }));
+      };
+
+      const getDaysDiff = (dateString) => {
+        const created = new Date(dateString);
+        const today = new Date();
+        created.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        const diffTime = today - created;
+        return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      };
+
+      const getGroupedFollowData = () => {
+        const groups = followList.reduce((acc, item) => {
+          if (!acc[item.date]) acc[item.date] = [];
+          acc[item.date].push(item);
+          return acc;
+        }, {});
+
+        const sortedDates = Object.keys(groups).sort((a, b) => {
+          if (sortOrder === 'newest') return new Date(b) - new Date(a);
+          return new Date(a) - new Date(b);
+        });
+
+        return sortedDates.map(date => ({
+          date,
+          items: groups[date]
+        }));
+      };
+
+      const dueFollowList = followList.filter(item => getDaysDiff(item.date) >= 7);
+      const groupedFollowData = getGroupedFollowData();
+
+      // 초안 에디터 핸들러
+      const handleChange = (key, value) => {
+        setFormData(prev => ({ ...prev, [key]: value }));
+      };
+
+      const handleClearForm = () => {
+        if (confirm('작성 중인 내용을 모두 초기화하시겠습니까?')) {
+          setFormData(initialFormState);
+          setGeneratedResult('');
+          setLastAutoSaveTime('');
+          localStorage.removeItem('BLOG_MANAGER_DRAFT_FORM');
+        }
+      };
+
+      const extractWords = (str) => {
+        if (!str) return [];
+        return str.split(/[\s,]+/).map(w => w.trim()).filter(Boolean);
+      };
+
+      const formatOperatingHours = (rawText) => {
+        if (!rawText.trim()) return '';
+        const lines = rawText.split('\n');
+        const dayTimes = [];
+
+        lines.forEach(line => {
+          if (line.includes('브레이크') || line.includes('Break') || line.includes('라스트오더')) return;
+          const match = line.match(/(월|화|수|목|금|토|일|매일|평일|주말)[^\d]*(\d{1,2}:\d{2}\s*[-~]\s*\d{1,2}:\d{2})/);
+          if (match) {
+            dayTimes.push({ day: match[1], time: match[2].replace(/\s+/g, '') });
+          } else if (line.includes(':')) {
+            const cleanLine = line.replace(/브레이크타임.*$/g, '').trim();
+            if (cleanLine) dayTimes.push({ day: '', time: cleanLine });
+          }
+        });
+
+        if (dayTimes.length === 0) return rawText.trim();
+
+        const timeGrouped = {};
+        dayTimes.forEach(item => {
+          if (!timeGrouped[item.time]) timeGrouped[item.time] = [];
+          if (item.day && !timeGrouped[item.time].includes(item.day)) {
+            timeGrouped[item.time].push(item.day);
+          }
+        });
+
+        let resultLines = [];
+        for (const [time, days] of Object.entries(timeGrouped)) {
+          if (days.length > 1) {
+            resultLines.push(`${days[0]}~${days[days.length - 1]}: ${time}`);
+          } else if (days.length === 1) {
+            resultLines.push(`${days[0]}: ${time}`);
+          } else {
+            resultLines.push(time);
+          }
+        }
+        return resultLines.join('\n');
+      };
+
+      const generateFormattedHashtags = () => {
+        const titleList = extractWords(formData.titleKeyword);
+        const bodyList = extractWords(formData.bodyKeyword);
+        const userTagList = extractWords(formData.hashtags);
+
+        const combinedTags = [...titleList, ...bodyList, ...userTagList]
+          .map(tag => tag.startsWith('#') ? tag : `#${tag}`)
+          .filter(tag => tag.length > 1 && tag !== '#협찬' && tag !== '#오늘클립챌린지');
+
+        const uniqueTags = Array.from(new Set(combinedTags));
+
+        let prefixTags = [];
+        if (platform === 'instagram') prefixTags = ['#협찬'];
+        else if (platform === 'clip') prefixTags = ['#협찬', '#오늘클립챌린지'];
+
+        const allFinalTags = [...prefixTags, ...uniqueTags];
+        if (allFinalTags.length === 0) return '';
+
+        let lines = [];
+        for (let i = 0; i < allFinalTags.length; i += 5) {
+          lines.push(allFinalTags.slice(i, i + 5).join(' '));
+        }
+        return lines.join('\n');
+      };
+
+      const generatePhotoNamesText = () => {
+        const cleanStr = (str) => str ? str.trim().replace(/[\s,]+/g, '_') : '';
+        const store = cleanStr(formData.storeName) || '장소명';
+        const firstTitleKw = extractWords(formData.titleKeyword)[0];
+        const mainKw = cleanStr(firstTitleKw) || '대표키워드';
+        
+        let photoList = [];
+        if (category === 'restaurant') {
+          const firstMenu = extractWords(formData.menu)[0];
+          const menu = cleanStr(firstMenu) || '대표메뉴';
+          photoList = [
+            `01_${store}_${mainKw}_${menu}_대표썸네일.png`,
+            `02_${store}_외관전경_간판컷.png`,
+            `03_${store}_내부인테리어_분위기.png`,
+            `04_${store}_메뉴판_가격정보.png`,
+            `05_${store}_${menu}_메인요리전체컷.png`,
+            `06_${store}_${menu}_디테일클로즈업.png`,
+            `07_${store}_${mainKw}_솔직후기마무리.png`
+          ];
+        } else if (category === 'visit') {
+          const purpose = cleanStr(formData.purpose) || '볼거리';
+          photoList = [
+            `01_${store}_${mainKw}_${purpose}_대표썸네일.png`,
+            `02_${store}_입구_외관전경.png`,
+            `03_${store}_내부시설_인테리어.png`,
+            `04_${store}_${purpose}_메인포토존.png`,
+            `05_${store}_내부체험_디테일컷.png`,
+            `06_${store}_${mainKw}_체험현장컷.png`,
+            `07_${store}_${mainKw}_방문총평.png`
+          ];
+        } else if (category === 'hotel') {
+          const room = cleanStr(formData.roomType.split('/')[0]) || '객실';
+          const amenity = cleanStr(formData.amenities.split(',')[0]) || '부대시설';
+          photoList = [
+            `01_${store}_${mainKw}_${room}_대표썸네일.png`,
+            `02_${store}_건물외관_로비.png`,
+            `03_${store}_${room}_객실전경_침실.png`,
+            `04_${store}_${room}_욕실_어메니티.png`,
+            `05_${store}_${amenity}_부대시설.png`,
+            `06_${store}_조식_부페_서비스.png`,
+            `07_${store}_${mainKw}_숙박총평.png`
+          ];
+        } else {
+          const pName = cleanStr(formData.productName) || '제품명';
+          photoList = [
+            `01_${store}_${pName}_${mainKw}_대표썸네일.png`,
+            `02_${store}_${pName}_패키지_언박싱.png`,
+            `03_${pName}_제품본품_디테일.png`,
+            `04_${pName}_제형_성분_디테일.png`,
+            `05_${pName}_실제사용_비포애프터.png`,
+            `06_${pName}_${mainKw}_실사용컷.png`,
+            `07_${store}_${pName}_사용총평.png`
+          ];
+        }
+        return `[추천 이미지 파일명 (네이버 SEO)]\n` + photoList.map(name => `• ${name}`).join('\n');
+      };
+
+      const handleGenerateDraft = () => {
+        let resultText = '';
+        const addField = (label, value) => value.trim() ? `${label}: ${value.trim()}\n` : `${label}:\n`;
+        const formatKeywords = (str) => Array.from(new Set(extractWords(str))).join(', ');
+
+        const platformNames = { blog: '네이버 블로그', instagram: '인스타그램', clip: '네이버 클립' };
+        resultText += `[채널]: ${platformNames[platform]}\n\n`;
+
+        if (category === 'product') {
+          resultText += addField('상호명', formData.storeName);
+          resultText += addField('사용 제품명', formData.productName);
+          resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
+          resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
+          resultText += addField('광고주 요청사항', formData.requestNote);
+          resultText += addField('본문소스', formData.bodySource);
+          resultText += addField('포스팅 삽입 링크', formData.link);
+        } else if (category === 'restaurant') {
+          resultText += addField('상호명(업체명)', formData.storeName);
+          resultText += addField('위치/주소', formData.location);
+          resultText += addField('영업시간', formatOperatingHours(formData.operatingHours));
+          resultText += addField('가게 소개', formData.storeIntro);
+          resultText += addField('찾아가는 길', formData.directions);
+          resultText += addField('주차 정보', formData.parking);
+          resultText += addField('예약 정보', formData.reservation);
+          resultText += addField('주문한 메뉴', formData.menu);
+          resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
+          resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
+          resultText += addField('광고주 요청사항', formData.requestNote);
+          resultText += addField('본문소스', formData.bodySource);
+          resultText += addField('지도/포스팅 링크', formData.link);
+        } else if (category === 'visit') {
+          resultText += addField('장소명', formData.storeName);
+          resultText += addField('위치/주소', formData.location);
+          resultText += addField('영업시간/운영시간', formatOperatingHours(formData.operatingHours));
+          resultText += addField('장소 소개', formData.storeIntro);
+          resultText += addField('찾아가는 길', formData.directions);
+          resultText += addField('주차 정보', formData.parking);
+          resultText += addField('예약/입장 정보', formData.reservation);
+          resultText += addField('방문 목적/특징', formData.purpose);
+          resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
+          resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
+          resultText += addField('광고주 요청사항', formData.requestNote);
+          resultText += addField('본문소스', formData.bodySource);
+          resultText += addField('관련 링크', formData.link);
+        } else if (category === 'hotel') {
+          resultText += addField('숙소명', formData.storeName);
+          resultText += addField('위치/지역', formData.location);
+          resultText += addField('룸 타입/체크인·아웃', formData.roomType);
+          resultText += addField('부대시설/조식 정보', formData.amenities);
+          resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
+          resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
+          resultText += addField('광고주 요청사항', formData.requestNote);
+          resultText += addField('본문소스', formData.bodySource);
+          resultText += addField('예약/삽입 링크', formData.link);
+        }
+
+        const finalHashtags = generateFormattedHashtags();
+        if (finalHashtags) resultText += `\n[해시태그]\n${finalHashtags}\n`;
+        resultText += `\n${generatePhotoNamesText()}\n`;
+
+        setGeneratedResult(resultText);
+      };
+
+      const handleCopyAndSave = async () => {
+        if (!generatedResult) {
+          alert('먼저 초안을 등록해 주세요!');
+          return;
+        }
+
+        navigator.clipboard?.writeText(generatedResult);
+
+        const newPost = {
+          id: Date.now(),
+          platform,
+          category,
+          title: formData.storeName || formData.productName || '제목 없음',
+          content: generatedResult,
+          date: new Date().toLocaleDateString('ko-KR')
+        };
+
+        await db.collection('savedPosts').doc(String(newPost.id)).set(newPost);
+
+        localStorage.removeItem('BLOG_MANAGER_DRAFT_FORM');
+        setLastAutoSaveTime('');
+
+        alert('클립보드 복사 및 구글 클라우드에 영구 저장되었습니다!');
+      };
+
+      const handleCopySavedItem = (text) => {
+        navigator.clipboard?.writeText(text);
+      };
+
+      const handleDeleteSavedItem = async (id) => {
+        if (confirm('정말 삭제하시겠습니까?')) {
+          await db.collection('savedPosts').doc(String(id)).delete();
+        }
+      };
+
+      const handleUpdateSavedContent = async (id, updatedText) => {
+        await db.collection('savedPosts').doc(String(id)).update({ content: updatedText });
+      };
+
+      const filteredPosts = savedPosts.filter(item => {
+        const matchesFilter = listFilter === 'all' || item.platform === listFilter;
+        const matchesSearch = searchQuery.trim() === '' || 
+          item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.content.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesFilter && matchesSearch;
+      });
+
+      const filteredCaptions = captionList.filter(item => {
+        const query = captionSearchQuery.trim().toLowerCase();
+        if (!query) return true;
+        return (
+          item.storeName.toLowerCase().includes(query) ||
+          item.captionText.toLowerCase().includes(query) ||
+          item.captionTags.toLowerCase().includes(query)
+        );
+      });
+
+      const categoryNames = { product: '제품리뷰', restaurant: '맛집', visit: '방문/장소', hotel: '호텔/숙소' };
+      const platformNames = { blog: '📝 블로그', instagram: '📸 인스타', clip: '🎬 클립' };
+
+      return (
+        <div class="max-w-3xl mx-auto space-y-4">
+          <h1 class="text-2xl font-bold text-center text-slate-800 my-4">🧚‍ 인플루언서 콘텐츠 초안 매니저</h1>
+
+          {/* 기존 데이터 백업 이관 안내 배너 */}
+          {hasLocalData && (
+            <div class="bg-amber-50 border-2 border-amber-400 p-3.5 rounded-xl flex justify-between items-center shadow-sm">
+              <div class="text-xs text-amber-800 font-semibold">
+                📦 기존 노트북에 저장된 데이터가 있습니다. 클라우드로 한 번에 옮기시겠습니까?
+              </div>
+              <button
+                onClick={migrateLocalDataToCloud}
+                class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg whitespace-nowrap transition"
+              >
+                클라우드로 이관하기
+              </button>
+            </div>
+          )}
+
+          {/* 탭 네비게이션 (5개 탭) */}
+          <div class="flex gap-1 bg-gray-200 p-1 rounded-xl text-xs sm:text-sm overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('editor')}
+              class={`flex-1 py-2.5 px-2 font-bold rounded-lg whitespace-nowrap transition ${activeTab === 'editor' ? 'bg-slate-800 text-white' : 'text-gray-600 hover:bg-gray-300'}`}
+            >
+              ✍️ 초안 작성
+            </button>
+            <button
+              onClick={() => setActiveTab('list')}
+              class={`flex-1 py-2.5 px-2 font-bold rounded-lg whitespace-nowrap transition ${activeTab === 'list' ? 'bg-slate-800 text-white' : 'text-gray-600 hover:bg-gray-300'}`}
+            >
+              📂 저장 목록 ({savedPosts.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('caption')}
+              class={`flex-1 py-2.5 px-2 font-bold rounded-lg whitespace-nowrap transition ${activeTab === 'caption' ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-300'}`}
+            >
+              ✍️ 인스타 캡션 ({captionList.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('follow')}
+              class={`flex-1 py-2.5 px-2 font-bold rounded-lg whitespace-nowrap transition ${activeTab === 'follow' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-300'}`}
+            >
+              👥 팔로우 ({followList.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('reference')}
+              class={`flex-1 py-2.5 px-2 font-bold rounded-lg whitespace-nowrap transition ${activeTab === 'reference' ? 'bg-pink-600 text-white' : 'text-gray-600 hover:bg-gray-300'}`}
+            >
+              📸 레퍼런스 ({references.length})
+            </button>
+          </div>
+
+          {/* TAB 1: 초안 작성 */}
+          {activeTab === 'editor' && (
+            <div class="space-y-4">
+              <div class="flex justify-between items-center text-xs text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm">
+                <span>
+                  ⏱️ 자동저장 (3분 주기): {lastAutoSaveTime ? `${lastAutoSaveTime} 저장됨` : '작성 중...'}
+                </span>
+                <button
+                  onClick={handleClearForm}
+                  class="text-rose-500 hover:underline font-semibold"
+                >
+                  🧹 작성 내용 초기화
+                </button>
+              </div>
+
+              <div class="bg-white p-4 rounded-xl shadow-sm">
+                <div class="text-xs font-bold text-gray-500 mb-2">1. 채널 선택</div>
+                <div class="flex gap-2">
+                  {[
+                    { key: 'blog', label: '📝 블로그' },
+                    { key: 'instagram', label: '📸 인스타' },
+                    { key: 'clip', label: '🎬 클립' }
+                  ].map(item => (
+                    <button
+                      key={item.key}
+                      onClick={() => setPlatform(item.key)}
+                      class={`flex-1 py-2 text-sm font-bold rounded-lg transition ${platform === item.key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-xl shadow-sm">
+                <div class="text-xs font-bold text-gray-500 mb-2">2. 카테고리 선택</div>
+                <div class="flex gap-2">
+                  {[
+                    { key: 'product', label: '🛍️ 제품리뷰' },
+                    { key: 'restaurant', label: '🍕 맛집' },
+                    { key: 'visit', label: '📍 방문/장소' },
+                    { key: 'hotel', label: '🏨 호텔/숙소' }
+                  ].map(item => (
+                    <button
+                      key={item.key}
+                      onClick={() => setCategory(item.key)}
+                      class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${category === item.key ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+                <div class="text-sm font-bold text-slate-800 border-b pb-2">📝 상세 내용 입력</div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">상호명 / 장소명 / 숙소명</label>
+                  <input
+                    type="text"
+                    placeholder="상호명 입력"
+                    value={formData.storeName}
+                    onChange={e => handleChange('storeName', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                {category === 'product' && (
+                  <div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">사용 제품명</label>
+                    <input
+                      type="text"
+                      placeholder="예: 클렌징폼 100ml"
+                      value={formData.productName}
+                      onChange={e => handleChange('productName', e.target.value)}
+                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {(category === 'restaurant' || category === 'visit' || category === 'hotel') && (
+                  <div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">위치 / 주소 / 지역 (장소 주소)</label>
+                    <input
+                      type="text"
+                      placeholder="예: 서울 강남구 테헤란로 123"
+                      value={formData.location}
+                      onChange={e => handleChange('location', e.target.value)}
+                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {(category === 'restaurant' || category === 'visit') && (
+                  <>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">영업시간 / 운영시간 (네이버지도 복사 붙여넣기)</label>
+                      <textarea
+                        rows="3"
+                        placeholder="월요일 11:00 - 22:00&#10;화요일 11:00 - 22:00 (브레이크타임 자동 무시됨)"
+                        value={formData.operatingHours}
+                        onChange={e => handleChange('operatingHours', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">가게 / 장소 소개</label>
+                      <input
+                        type="text"
+                        placeholder="예: 성수동 감성 가득한 대표 대형 스튜디오 카페"
+                        value={formData.storeIntro}
+                        onChange={e => handleChange('storeIntro', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">찾아가는 길</label>
+                      <input
+                        type="text"
+                        placeholder="예: 강남역 1번 출구 도보 3분 거리"
+                        value={formData.directions}
+                        onChange={e => handleChange('directions', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">주차 정보</label>
+                      <input
+                        type="text"
+                        placeholder="예: 건물 지하 주차장 2시간 무료"
+                        value={formData.parking}
+                        onChange={e => handleChange('parking', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">예약 / 입장 정보</label>
+                      <input
+                        type="text"
+                        placeholder="예: 네이버 사전 예약 필수, 현장 예매 가능"
+                        value={formData.reservation}
+                        onChange={e => handleChange('reservation', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {category === 'restaurant' && (
+                  <div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">주문한 메뉴 (띄어쓰기 또는 쉼표 구분)</label>
+                    <input
+                      type="text"
+                      placeholder="예: 파스타 스테이크 에이드"
+                      value={formData.menu}
+                      onChange={e => handleChange('menu', e.target.value)}
+                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {category === 'visit' && (
+                  <div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">방문 목적 / 특징</label>
+                    <input
+                      type="text"
+                      placeholder="예: 데이트코스 추천, 아이와 가볼만한 곳"
+                      value={formData.purpose}
+                      onChange={e => handleChange('purpose', e.target.value)}
+                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {category === 'hotel' && (
+                  <>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">룸 타입 / 체크인·아웃</label>
+                      <input
+                        type="text"
+                        placeholder="예: 디럭스 킹 / 15:00 ~ 11:00"
+                        value={formData.roomType}
+                        onChange={e => handleChange('roomType', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">부대시설 / 조식 정보</label>
+                      <input
+                        type="text"
+                        placeholder="예: 수영장 무료, 조식 포함"
+                        value={formData.amenities}
+                        onChange={e => handleChange('amenities', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">제목 키워드 (띄어쓰기 또는 쉼표 구분)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 강남역맛집 협찬화장품 데이트코스"
+                    value={formData.titleKeyword}
+                    onChange={e => handleChange('titleKeyword', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">본문 키워드 (띄어쓰기 또는 쉼표 구분)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 파스타맛집 분위기좋은카페 수분크림"
+                    value={formData.bodyKeyword}
+                    onChange={e => handleChange('bodyKeyword', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">광고주 요청사항</label>
+                  <input
+                    type="text"
+                    placeholder="예: 지도 필수 첨부"
+                    value={formData.requestNote}
+                    onChange={e => handleChange('requestNote', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">본문소스 (콘텐츠 내용)</label>
+                  <textarea
+                    rows="5"
+                    placeholder="본문 내용을 자유롭게 입력하세요..."
+                    value={formData.bodySource}
+                    onChange={e => handleChange('bodySource', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">추가 해시태그 (공백/쉼표 구분)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 일상 소통 맞팔"
+                    value={formData.hashtags}
+                    onChange={e => handleChange('hashtags', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">포스팅 삽입 링크</label>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={formData.link}
+                    onChange={e => handleChange('link', e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleGenerateDraft}
+                  class="w-full py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-lg transition mt-4"
+                >
+                  ✨ 초안 등록 및 양식 생성
+                </button>
+              </div>
+
+              {generatedResult && (
+                <div class="bg-white p-4 rounded-xl shadow-sm space-y-3 border-2 border-indigo-100">
+                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식 (사진파일명 자동 결합됨)</div>
+                  <textarea
+                    rows="10"
+                    readOnly
+                    value={generatedResult}
+                    class="w-full border rounded-lg p-3 text-xs bg-slate-50 text-slate-800 font-mono resize-y"
+                  />
+                  <button
+                    onClick={handleCopyAndSave}
+                    class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition"
+                  >
+                    📋 복사 및 구글 클라우드 영구 저장
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: 저장된 초안 목록 */}
+          {activeTab === 'list' && (
+            <div class="bg-white p-4 rounded-xl shadow-sm space-y-4">
+              <div class="text-sm font-bold text-slate-800">📂 저장된 초안 목록</div>
+
+              <input
+                type="text"
+                placeholder="🔍 상호명, 제품명, 키워드로 검색..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                class="w-full border-2 border-slate-600 rounded-lg p-2.5 text-sm"
+              />
+
+              <div class="flex gap-1.5">
+                {[
+                  { key: 'all', label: '전체' },
+                  { key: 'blog', label: '블로그' },
+                  { key: 'instagram', label: '인스타' },
+                  { key: 'clip', label: '클립' }
+                ].map(item => (
+                  <button
+                    key={item.key}
+                    onClick={() => setListFilter(item.key)}
+                    class={`flex-1 py-1.5 text-xs font-semibold rounded ${listFilter === item.key ? 'bg-slate-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {filteredPosts.length === 0 ? (
+                <div class="text-center py-10 text-gray-400 text-sm">저장된 초안이 없습니다. 🧚‍</div>
+              ) : (
+                <div class="space-y-3">
+                  {filteredPosts.map(item => (
+                    <SavedItemCard
+                      key={item.id}
+                      item={item}
+                      platformNames={platformNames}
+                      categoryNames={categoryNames}
+                      onCopy={handleCopySavedItem}
+                      onDelete={handleDeleteSavedItem}
+                      onUpdate={handleUpdateSavedContent}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: ✍️ 인스타 캡션 매니저 (신규 추가) */}
+          {activeTab === 'caption' && (
+            <div class="space-y-4">
+              {/* 등록 폼 */}
+              <form onSubmit={handleAddCaption} class="bg-white p-4 rounded-xl shadow-sm space-y-3 border-2 border-purple-100">
+                <div class="text-sm font-bold text-slate-800 border-b pb-2">➕ 인스타 캡션 신규 저장</div>
+                
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">상호명 / 장소명 (검색용)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 성수동 카페 루프탑, 올리브영 협찬"
+                    value={newCaptionStore}
+                    onChange={e => setNewCaptionStore(e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">캡션 본문 (복붙 및 자유 작성)</label>
+                  <textarea
+                    rows="5"
+                    placeholder="인스타그램 본문 캡션 텍스트를 그대로 복붙하세요..."
+                    value={newCaptionText}
+                    onChange={e => setNewCaptionText(e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label class="text-xs font-semibold text-gray-500 block mb-1">해시태그 (다른 줄 복붙)</label>
+                  <textarea
+                    rows="3"
+                    placeholder="#성수카페 #협찬 #오늘클립챌린지..."
+                    value={newCaptionTags}
+                    onChange={e => setNewCaptionTags(e.target.value)}
+                    class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-purple-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-lg transition"
+                >
+                  💾 캡션 저장하기
+                </button>
+              </form>
+
+              {/* 검색 및 목록 */}
+              <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+                <div class="text-sm font-bold text-slate-800">📋 저장된 캡션 목록 ({filteredCaptions.length})</div>
+
+                <input
+                  type="text"
+                  placeholder="🔍 상호명, 캡션 내용, 태그로 검색..."
+                  value={captionSearchQuery}
+                  onChange={e => setCaptionSearchQuery(e.target.value)}
+                  class="w-full border-2 border-purple-200 rounded-lg p-2.5 text-sm focus:outline-purple-500"
+                />
+
+                {filteredCaptions.length === 0 ? (
+                  <div class="text-center py-10 text-gray-400 text-sm">저장된 캡션이 없습니다. 🧚‍</div>
+                ) : (
+                  <div class="space-y-4">
+                    {filteredCaptions.map(item => (
+                      <CaptionItemCard
+                        key={item.id}
+                        item={item}
+                        onCopy={copyTextToClipboard}
+                        onDelete={handleDeleteCaption}
+                        onUpdate={handleUpdateCaption}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: 👥 팔로우 / 언팔 관리자 */}
+          {activeTab === 'follow' && (
+            <div class="space-y-4">
+              {/* 오늘의 추천 댓글 박스 */}
+              <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl shadow-sm border border-purple-200 space-y-2">
+                <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
+                  <span class="text-xs font-bold text-purple-700">💬 오늘의 MZ 추천 댓글 (수정 및 드래그 복사 가능)</span>
+                  <span class="text-[10px] text-purple-500 font-semibold">새로고침 시 랜던 변경</span>
+                </div>
+
+                <div class="space-y-2 pt-1 text-xs max-h-56 overflow-y-auto pr-1">
+                  <div class="flex items-center justify-between bg-white p-1.5 rounded border-2 border-indigo-300 shadow-2xs gap-2">
+                    <span class="text-[11px] font-bold text-indigo-600 whitespace-nowrap pl-1">📌 고정:</span>
+                    <input
+                      type="text"
+                      value={editableComments.fixed}
+                      onChange={e => handleCommentChange('fixed', e.target.value)}
+                      class="w-full font-bold text-indigo-900 bg-transparent focus:outline-none text-xs"
+                    />
+                    <button
+                      onClick={() => copyTextToClipboard(editableComments.fixed)}
+                      class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                    >
+                      복사
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-200 shadow-2xs gap-2">
+                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🤝 먹8:</span>
+                    <input
+                      type="text"
+                      value={editableComments.muk8}
+                      onChange={e => handleCommentChange('muk8', e.target.value)}
+                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
+                    />
+                    <button
+                      onClick={() => copyTextToClipboard(editableComments.muk8)}
+                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                    >
+                      복사
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
+                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🍕 맛집:</span>
+                    <input
+                      type="text"
+                      value={editableComments.restaurant}
+                      onChange={e => handleCommentChange('restaurant', e.target.value)}
+                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
+                    />
+                    <button
+                      onClick={() => copyTextToClipboard(editableComments.restaurant)}
+                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                    >
+                      복사
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
+                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">☕️ 분위기:</span>
+                    <input
+                      type="text"
+                      value={editableComments.mood}
+                      onChange={e => handleCommentChange('mood', e.target.value)}
+                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
+                    />
+                    <button
+                      onClick={() => copyTextToClipboard(editableComments.mood)}
+                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                    >
+                      복사
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
+                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🏨 데이트:</span>
+                    <input
+                      type="text"
+                      value={editableComments.date}
+                      onChange={e => handleCommentChange('date', e.target.value)}
+                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
+                    />
+                    <button
+                      onClick={() => copyTextToClipboard(editableComments.date)}
+                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                    >
+                      복사
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 내 계정 수동 현황 카드 */}
+              <div class="bg-white p-4 rounded-xl shadow-sm border-2 border-indigo-200 space-y-3">
+                {isEditingStats ? (
+                  <div class="space-y-2">
+                    <div class="text-xs font-bold text-slate-800">✏️ 내 계정 현황 수정</div>
+                    <input
+                      type="text"
+                      placeholder="내 인스타 계정명 (예: my_account)"
+                      value={myUsername}
+                      onChange={e => setMyUsername(e.target.value)}
+                      class="w-full border rounded-lg p-2 text-xs bg-gray-50"
+                    />
+                    <div class="flex gap-2">
+                      <input
+                        type="number"
+                        placeholder="팔로워 수"
+                        value={followersCount}
+                        onChange={e => setFollowersCount(e.target.value)}
+                        class="flex-1 border rounded-lg p-2 text-xs bg-gray-50"
+                      />
+                      <input
+                        type="number"
+                        placeholder="팔로잉 수"
+                        value={followingCount}
+                        onChange={e => setFollowingCount(e.target.value)}
+                        class="flex-1 border rounded-lg p-2 text-xs bg-gray-50"
+                      />
+                    </div>
+                    <button
+                      onClick={saveStats}
+                      class="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700"
+                    >
+                      💾 저장하기
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div class="flex justify-between items-center mb-3">
+                      <span class="font-bold text-indigo-600 text-sm">
+                        {myUsername ? `@${myUsername.replace('@', '')}` : '내 계정 현황'}
+                      </span>
+                      <div class="flex gap-1.5">
+                        {myUsername && (
+                          <a
+                            href={`https://www.instagram.com/${myUsername.replace('@', '')}/`}
+                            target="_blank"
+                            rel="noreferrer"
+                            class="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 inline-block"
+                          >
+                            내 인스타 열기 ↗
+                          </a>
+                        )}
+                        <button
+                          onClick={() => setIsEditingStats(true)}
+                          class="px-2.5 py-1 bg-gray-200 text-gray-700 text-xs font-semibold rounded hover:bg-gray-300"
+                        >
+                          수치 수정
+                        </button>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-center bg-gray-50 p-2.5 rounded-lg border">
+                      <div>
+                        <div class="text-xs text-gray-500">팔로워</div>
+                        <div class="text-lg font-bold text-slate-800">{followersCount || '0'}</div>
+                      </div>
+                      <div class="border-l border-gray-200">
+                        <div class="text-xs text-gray-500">팔로잉</div>
+                        <div class="text-lg font-bold text-slate-800">{followingCount || '0'}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 신규 계정 등록 입력 폼 */}
+              <form onSubmit={handleAddFollow} class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+                <div class="text-sm font-bold text-slate-800 border-b pb-2">➕ 추적 계정 등록</div>
+                <input
+                  type="text"
+                  placeholder="추적할 계정명 입력 (예: instagram)"
+                  value={followUsernameInput}
+                  onChange={e => setFollowUsernameInput(e.target.value)}
+                  class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                />
+                <div class="flex gap-2 items-center">
+                  <span class="text-xs font-semibold text-gray-500 whitespace-nowrap">등록일 지정:</span>
+                  <input
+                    type="text"
+                    placeholder="YYYY-MM-DD"
+                    value={followDateInput}
+                    onChange={e => setFollowDateInput(e.target.value)}
+                    class="flex-1 border rounded-lg p-2 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg transition"
+                  >
+                    등록
+                  </button>
+                </div>
+              </form>
+
+              {/* 7일 경과 경고 섹션 */}
+              {dueFollowList.length > 0 && (
+                <div class="bg-rose-50 border-2 border-rose-500 p-4 rounded-xl shadow-sm space-y-2">
+                  <div class="text-xs font-bold text-rose-600">
+                    🚨 7일 경과! 언팔로우 점검 대상 ({dueFollowList.length})
+                  </div>
+                  <div class="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                    {dueFollowList.map(item => {
+                      const isClicked = clickedIds.includes(item.id);
+                      return (
+                        <div key={`due-${item.id}`} class="flex justify-between items-center text-xs bg-white p-2 rounded border border-rose-200">
+                          <button
+                            onClick={() => copyUsernameAndMark(item)}
+                            class={`font-semibold hover:underline text-left ${isClicked ? 'text-purple-600' : 'text-gray-800'}`}
+                          >
+                            @{item.username} <span class="text-gray-400 font-normal">({item.date})</span> {isClicked ? '✓ 복사됨' : ''}
+                          </button>
+                          <button
+                            onClick={() => copyUsernameAndMark(item)}
+                            class={`px-2 py-1 text-white font-bold rounded ${isClicked ? 'bg-purple-600 hover:bg-purple-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                          >
+                            {isClicked ? '복사됨' : '계정 복사'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 목록 타이틀 & 정렬 버튼 */}
+              <div class="flex justify-between items-center">
+                <div class="text-sm font-bold text-slate-800">📋 날짜별 목록</div>
+                <div class="flex bg-gray-200 p-1 rounded-lg">
+                  <button
+                    onClick={() => setSortOrder('newest')}
+                    class={`px-3 py-1 text-xs font-bold rounded transition ${sortOrder === 'newest' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-600'}`}
+                  >
+                    최신순
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('oldest')}
+                    class={`px-3 py-1 text-xs font-bold rounded transition ${sortOrder === 'oldest' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-600'}`}
+                  >
+                    오래된순
+                  </button>
+                </div>
+              </div>
+
+              {/* 날짜별 그룹화 리스트 */}
+              {groupedFollowData.length === 0 ? (
+                <div class="bg-white p-8 text-center text-gray-400 text-sm rounded-xl">
+                  등록된 추적 계정이 없습니다. 🧚‍
+                </div>
+              ) : (
+                <div class="space-y-4">
+                  {groupedFollowData.map(group => {
+                    const days = getDaysDiff(group.date);
+                    const isOver7Days = days >= 7;
+
+                    return (
+                      <div key={group.date} class="space-y-2">
+                        <div class={`flex justify-between items-center px-3 py-1.5 rounded-lg text-xs font-bold ${isOver7Days ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-gray-200 text-gray-700'}`}>
+                          <span>
+                            📅 {group.date} ({days < 0 ? `${Math.abs(days)}일 후` : `${days}일 경과`}) {isOver7Days ? '⚠️ 7일 이상 경과' : ''} ({group.items.length}개)
+                          </span>
+                          <button
+                            onClick={() => handleDeleteDateGroup(group.date, group.items)}
+                            class="px-2 py-0.5 bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold rounded transition"
+                          >
+                            이 날짜 전체 삭제
+                          </button>
+                        </div>
+
+                        <div class="space-y-2">
+                          {group.items.map(item => {
+                            const isClicked = clickedIds.includes(item.id);
+                            return (
+                              <div key={item.id} class={`p-3 rounded-lg bg-white border ${isOver7Days ? 'border-rose-400 bg-rose-50/40' : 'border-gray-200'} space-y-2`}>
+                                <div class="flex justify-between items-center">
+                                  <button
+                                    onClick={() => copyUsernameAndMark(item)}
+                                    class={`font-bold hover:underline text-sm text-left transition ${
+                                      isClicked ? 'text-purple-600 font-extrabold' : 'text-indigo-600'
+                                    }`}
+                                  >
+                                    @{item.username} {isClicked ? '✓ 복사됨' : ''}
+                                  </button>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5 justify-end">
+                                  <button
+                                    onClick={() => copyUsernameAndMark(item)}
+                                    class={`px-2.5 py-1 font-semibold text-xs rounded transition ${
+                                      isClicked ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    {isClicked ? '✓ 계정 복사됨' : '계정 복사'}
+                                  </button>
+                                  <button
+                                    onClick={() => copyTextToClipboard(item.url)}
+                                    class="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded hover:bg-gray-200"
+                                  >
+                                    링크 복사
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditFollowDate(item)}
+                                    class="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded hover:bg-gray-200"
+                                  >
+                                    날짜 수정
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteFollow(item.id)}
+                                    class="px-2.5 py-1 bg-rose-100 text-rose-600 font-semibold text-xs rounded hover:bg-rose-200"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: 📸 피드 레퍼런스 모음 */}
+          {activeTab === 'reference' && (
+            <div class="space-y-4">
+              <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+                <div class="flex justify-between items-center border-b pb-2">
+                  <span class="text-sm font-bold text-slate-800">➕ 레퍼런스 이미지 추가</span>
+                  <span class="text-[11px] font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded">
+                    📋 어디서든 이미지 붙여넣기(Ctrl+V) 가능
+                  </span>
+                </div>
+                
+                <div class="space-y-2">
+                  <div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">방법 1. 이미지 파일 직접 첨부 (다중 선택 가능)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileUpload}
+                      class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
+                    />
+                  </div>
+
+                  <form onSubmit={handleAddUrlReference} class="pt-2 border-t space-y-2">
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">방법 2. 웹 이미지 주소(URL)로 추가</label>
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://... 이미지 링크 입력"
+                        value={refImageUrlInput}
+                        onChange={e => setRefImageUrlInput(e.target.value)}
+                        class="flex-1 border rounded-lg p-2 text-xs bg-gray-50 focus:bg-white focus:outline-pink-500"
+                      />
+                      <button
+                        type="submit"
+                        class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-lg transition"
+                      >
+                        URL 추가
+                      </button>
+                    </div>
+                  </form>
+
+                  <div class="pt-2">
+                    <label class="text-xs font-semibold text-gray-500 block mb-1">참고 메모 (선택사항)</label>
+                    <input
+                      type="text"
+                      placeholder="예: 성수동 카페 4:5 인물 구도 참고, 파스텔 톤 색감"
+                      value={refNoteInput}
+                      onChange={e => setRefNoteInput(e.target.value)}
+                      class="w-full border rounded-lg p-2 text-xs bg-gray-50 focus:bg-white focus:outline-pink-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 피드 갤러리 */}
+              <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+                <div class="flex justify-between items-center border-b pb-2">
+                  <span class="text-sm font-bold text-slate-800">📸 피드 레퍼런스 갤러리 (4:5 비율)</span>
+                  <span class="text-xs text-gray-400">클릭 시 확대 보기</span>
+                </div>
+
+                {references.length === 0 ? (
+                  <div class="text-center py-12 text-gray-400 text-xs leading-relaxed">
+                    등록된 레퍼런스 이미지가 없습니다. 🧚‍<br />
+                    화면 아무 곳에서나 **이미지를 복사한 후 <span class="text-pink-600 font-bold">Ctrl+V (붙여넣기)</span>**를 해보세요!
+                  </div>
+                ) : (
+                  <div class="grid grid-cols-3 gap-1 sm:gap-2">
+                    {references.map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedRef(item)}
+                        class="relative group aspect-[4/5] bg-gray-100 rounded-lg overflow-hidden cursor-pointer border hover:opacity-90 transition shadow-xs"
+                      >
+                        <img
+                          src={item.src}
+                          alt="reference"
+                          class="w-full h-full object-cover"
+                        />
+                        {item.note && (
+                          <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] p-1 truncate text-center">
+                            {item.note}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 이미지 확대 모달 */}
+              {selectedRef && (
+                <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-xs">
+                  <div class="bg-white rounded-2xl max-w-sm sm:max-w-md w-full overflow-hidden shadow-2xl space-y-3 p-4 relative animate-fade-in">
+                    <button
+                      onClick={() => setSelectedRef(null)}
+                      class="absolute top-3 right-3 text-gray-500 hover:text-black font-bold text-xl bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center z-10"
+                    >
+                      ✕
+                    </button>
+                    
+                    <div class="text-sm font-bold text-slate-800 border-b pb-2">
+                      📸 인스타그램 4:5 레퍼런스
+                    </div>
+
+                    <div class="aspect-[4/5] max-h-[65vh] flex items-center justify-center bg-black/5 rounded-xl overflow-hidden mx-auto border">
+                      <img
+                        src={selectedRef.src}
+                        alt="Enlarged Reference"
+                        class="w-full h-full object-contain"
+                      />
+                    </div>
+
+                    {selectedRef.note && (
+                      <div class="bg-gray-50 p-2.5 rounded-lg text-xs text-gray-700">
+                        <span class="font-bold text-pink-600 block mb-0.5">📝 메모:</span>
+                        {selectedRef.note}
+                      </div>
+                    )}
+
+                    <div class="flex justify-between items-center text-xs text-gray-400 pt-2 border-t">
+                      <span>등록일: {selectedRef.date}</span>
+                      <button
+                        onClick={() => handleDeleteReference(selectedRef.id)}
+                        class="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg transition"
+                      >
+                        🗑️ 사진 삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ✍️ 인스타 캡션 개별 카드 컴포넌트
+    function CaptionItemCard({ item, onCopy, onDelete, onUpdate }) {
+      const [editStore, setEditStore] = useState(item.storeName);
+      const [editText, setEditText] = useState(item.captionText);
+      const [editTags, setEditTags] = useState(item.captionTags);
+
+      const handleSave = () => {
+        onUpdate(item.id, editStore, editText, editTags);
+      };
+
+      const handleCopyAll = () => {
+        const fullContent = `${editText}\n\n${editTags}`.trim();
+        onCopy(fullContent);
+      };
+
+      return (
+        <div class="border-2 border-purple-100 rounded-xl p-3.5 bg-purple-50/30 space-y-3">
+          <div class="flex justify-between items-center text-xs">
+            <input
+              type="text"
+              value={editStore}
+              onChange={e => setEditStore(e.target.value)}
+              placeholder="상호명 입력"
+              class="font-bold text-purple-900 bg-white border border-purple-200 rounded px-2 py-1 text-xs focus:outline-purple-500"
+            />
+            <span class="text-gray-400 text-[11px]">{item.date}</span>
+          </div>
+
+          <div class="space-y-2">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-slate-600">📝 캡션 본문</span>
+                <button
+                  onClick={() => onCopy(editText)}
+                  class="px-2 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-[10px] rounded"
+                >
+                  캡션만 복사
+                </button>
+              </div>
+              <textarea
+                rows="4"
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                class="w-full border rounded-lg p-2 text-xs bg-white text-gray-800 focus:outline-purple-500 resize-y"
+              />
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-slate-600">🏷️ 해시태그</span>
+                <button
+                  onClick={() => onCopy(editTags)}
+                  class="px-2 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-[10px] rounded"
+                >
+                  태그만 복사
+                </button>
+              </div>
+              <textarea
+                rows="2"
+                value={editTags}
+                onChange={e => setEditTags(e.target.value)}
+                class="w-full border rounded-lg p-2 text-xs bg-white text-purple-700 font-semibold focus:outline-purple-500 resize-y"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-1 border-t border-purple-100">
+            <button
+              onClick={() => onDelete(item.id)}
+              class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 font-bold text-xs rounded-lg transition"
+            >
+              🗑️ 삭제
+            </button>
+            <div class="flex gap-1.5">
+              <button
+                onClick={handleSave}
+                class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition"
+              >
+                💾 수정 저장
+              </button>
+              <button
+                onClick={handleCopyAll}
+                class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition shadow-xs"
+              >
+                📋 캡션+태그 전체 복사
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SavedItemCard({ item, platformNames, categoryNames, onCopy, onDelete, onUpdate }) {
+      const [isEditing, setIsEditing] = useState(false);
+      const [editContent, setEditContent] = useState(item.content);
+
+      const handleSaveEdit = () => {
+        onUpdate(item.id, editContent);
+        setIsEditing(false);
+      };
+
+      const handleKeyDown = (e) => {
+        if (!isEditing) {
+          if (!(e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+          }
+        }
+      };
+
+      return (
+        <div class="border rounded-lg p-3 bg-gray-50 space-y-2">
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-bold text-indigo-600">{platformNames[item.platform]} | {categoryNames[item.category]}</span>
+            <span class="text-gray-400">{item.date}</span>
+          </div>
+          <div class="font-bold text-slate-800">{item.title}</div>
+          
+          <textarea
+            rows={isEditing ? 10 : 6}
+            value={editContent}
+            onChange={e => setEditContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            class={`w-full border rounded p-2 text-xs transition resize-y overflow-auto cursor-text ${
+              isEditing ? 'bg-white text-slate-900 border-indigo-500 font-mono shadow-inner' : 'bg-white text-gray-700 border-gray-300'
+            }`}
+          />
+
+          <div class="flex justify-end gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleSaveEdit}
+                  class="px-3 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded hover:bg-indigo-700"
+                >
+                  💾 저장
+                </button>
+                <button
+                  onClick={() => { setEditContent(item.content); setIsEditing(false); }}
+                  class="px-3 py-1.5 bg-gray-400 text-white font-bold text-xs rounded hover:bg-gray-500"
+                >
+                  취소
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  class="px-3 py-1.5 bg-slate-600 text-white font-bold text-xs rounded hover:bg-slate-700"
+                >
+                  ✏️ 수정
+                </button>
+                <button
+                  onClick={() => onCopy(item.content)}
+                  class="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded hover:bg-emerald-700"
+                >
+                  📋 복사
+                </button>
+                <button
+                  onClick={() => onDelete(item.id)}
+                  class="px-3 py-1.5 bg-rose-500 text-white font-bold text-xs rounded hover:bg-rose-600"
+                >
+                  🗑️ 삭제
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
