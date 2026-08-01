@@ -309,6 +309,36 @@
         return `[추천 이미지 파일명 (네이버 SEO)]\n` + photoList.map(name => `• ${name}`).join('\n');
       };
 
+      // 상냥한 MZ 톤 추천 댓글 생성 함수 ('ㅋ' 단일 사용 금지, '선팔' 단어 완벽 금지)
+      const generateFriendlyCommentsText = () => {
+        const store = formData.storeName ? formData.storeName.trim() : (formData.productName ? formData.productName.trim() : '여기');
+        
+        let c1 = '', c2 = '', c3 = '';
+
+        if (category === 'restaurant') {
+          c1 = `우와 ${store} 분위기 진짜 대박이네요...✨ 보자마자 반해서 바로 저장했어요!! 사진 느낌도 너무 좋구 취향저격이라 소통하면서 오랫동안 알고 지내고 싶어요 💖 오늘 하루도 맛있는 거 많이 드시구 행복하세요~🥰`;
+          c2 = `크... ${store} 비주얼 미쳤다 진짜 🥹 실례가 안 된다면 종종 놀러 와서 맛집 정보 얻어가도 될까요?! 사진 감성이 너무 취향이라 보자마자 홀린 듯 들어왔어요 ㅎㅎ 자주 소통해요 우리! 👀✨`;
+          c3 = `피드 구경하다가 음식 맛깔나 보이는 포스팅에 한참 머물다 가요~ 히히 💕 올려주신 후기 잘 보고 갑니다! 앞으로 맛난 정보 나누면서 친하게 지내면 좋겠어요 🥰 편안한 시간 보내세요!!`;
+        } else if (category === 'visit') {
+          c1 = `우와 ${store} 진짜 예쁘게 잘 나오네요...✨ 보자마자 반해서 바로 장소 저장했어요!! 사진 느낌도 너무 좋구 취향저격이라 자주 소통하면서 지내고 싶어요 💖 오늘 하루도 즐겁게 보내세요~🥰`;
+          c2 = `크... ${store} 감성 미쳤다 진짜 🥹 실례가 안 된다면 종종 놀러 와서 핫플 정보 얻어가도 될까요?! 사진 느낌이 완벽해서 홀린 듯 들어왔어요 ㅎㅎ 앞으로 자주 소통해요 우리! 👀✨`;
+          c3 = `피드 구경하다가 분위기가 너무 예뻐서 한참 머물다 가요~ 히히 💕 여행/장소 포스팅 너무 잘 보고 갑니다! 앞으로 예쁜 정보 나누면서 친하게 지내요 🥰`;
+        } else if (category === 'hotel') {
+          c1 = `우와 ${store} 숙소 분위기 진짜 대박이네요...✨ 보자마자 반해서 다음 여행지로 저장했어요!! 사진 감성도 너무 좋구 취향저격이라 자주 소통하면서 지내고 싶어요 💖 오늘도 행복한 하루 보내세요~🥰`;
+          c2 = `크... ${store} 뷰랑 인테리어 미쳤다 진짜 🥹 실례가 안 된다면 종종 놀러 와서 숙소 정보 얻어가도 될까요?! 감성이 너무 취향이라 홀린 듯 들어왔어요 ㅎㅎ 자주 소통해요 우리! 👀✨`;
+          c3 = `피드 구경하다가 숙소 힐링 포스팅에 한참 머물다 가요~ 히히 💕 예쁜 정보 잘 보고 갑니다! 앞으로 꿀정보 나누면서 친하게 지내요 🥰 편안한 밤 되세요!!`;
+        } else { // product
+          c1 = `우와 ${store} 사용후기 진짜 꼼꼼하고 유용하네요...✨ 보자마자 반해서 포스팅 저장했어요!! 센스 넘치는 사진 느낌도 취향저격이라 소통하면서 지내고 싶어요 💖 오늘도 행복하게 보내세요~🥰`;
+          c2 = `크... ${store} 제품 정보 미쳤다 진짜 🥹 실례가 안 된다면 종종 놀러 와서 유용한 뷰티/제품 정보 얻어가도 될까요?! 사진 감성이 너무 예뻐서 홀린 듯 들어왔어요 ㅎㅎ 자주 소통해요 우리! 👀✨`;
+          c3 = `피드 구경하다가 정성스러운 리뷰에 한참 머물다 가요~ 히히 💕 올려주신 내용 잘 보고 갑니다! 앞으로 좋은 정보 공유하면서 친하게 지내요 🥰`;
+        }
+
+        // 혹시 모를 금지어('선팔') 교체 및 홀로 사용된 'ㅋ' 교체 2중 검증
+        const cleanComment = (text) => text.replace(/선팔/g, '소통').replace(/(^|\s)ㅋ(?=\s|$)/g, 'ㅎㅎ');
+
+        return `[💬 추천 MZ 댓글 모음 (상냥한 톤)]\n1. ${cleanComment(c1)}\n2. ${cleanComment(c2)}\n3. ${cleanComment(c3)}`;
+      };
+
       const handleGenerateDraft = () => {
         let resultText = '';
         const addField = (label, value) => value.trim() ? `${label}: ${value.trim()}\n` : `${label}:\n`;
@@ -369,6 +399,7 @@
         const finalHashtags = generateFormattedHashtags();
         if (finalHashtags) resultText += `\n[해시태그]\n${finalHashtags}\n`;
         resultText += `\n${generatePhotoNamesText()}\n`;
+        resultText += `\n${generateFriendlyCommentsText()}\n`;
 
         setGeneratedResult(resultText);
         setFormData(initialFormState);
@@ -824,9 +855,9 @@
 
               {generatedResult && (
                 <div class="bg-white p-4 rounded-xl shadow-sm space-y-3 border-2 border-indigo-100">
-                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식 (사진파일명 자동 결합됨)</div>
+                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식 (사진파일명 & 추천댓글 자동 결합됨)</div>
                   <textarea
-                    rows="10"
+                    rows="12"
                     readOnly
                     value={generatedResult}
                     class="w-full border rounded-lg p-3 text-xs bg-slate-50 text-slate-800 font-mono resize-y"
