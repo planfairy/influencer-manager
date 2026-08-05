@@ -78,6 +78,7 @@
 
       const [formData, setFormData] = useState(initialFormState);
       const [generatedResult, setGeneratedResult] = useState('');
+      const [generatedPhotoList, setGeneratedPhotoList] = useState([]);
       const [lastAutoSaveTime, setLastAutoSaveTime] = useState('');
 
       // 팔로우 통계 관련 State
@@ -178,13 +179,14 @@
         if (confirm('작성 중인 입력폼 내용만 초기화하시겠습니까? (저장 목록은 유지됩니다)')) {
           setFormData(initialFormState);
           setGeneratedResult('');
+          setGeneratedPhotoList([]);
           setLastAutoSaveTime('');
         }
       };
 
       const extractWords = (str) => {
         if (!str) return [];
-        return str.split(/[\s,]+/).map(w => w.trim()).filter(Boolean);
+        return str.split(/[\s,]+/).map(w => w.trim().replace(/^#/, '')).filter(Boolean);
       };
 
       const formatOperatingHours = (rawText) => {
@@ -251,70 +253,77 @@
         return lines.join('\n');
       };
 
-      const generatePhotoNamesText = () => {
+      // 🌟 입력된 다양한 키워드를 조합하는 개선된 SEO 사진 파일명 생성 로직
+      const generatePhotoNamesArray = () => {
         const cleanStr = (str) => str ? str.trim().replace(/[\s,]+/g, '_') : '';
         const store = cleanStr(formData.storeName) || '장소명';
-        
-        const firstTitleKw = extractWords(formData.titleKeyword)[0];
-        const mainKw = cleanStr(firstTitleKw) || '대표키워드';
-        
+
+        const titleKws = extractWords(formData.titleKeyword).map(cleanStr);
+        const bodyKws = extractWords(formData.bodyKeyword).map(cleanStr);
+        const allKeywords = Array.from(new Set([...titleKws, ...bodyKws]));
+
+        // 순차적으로 다양한 키워드를 가져오기 위한 유틸리티
+        const getKw = (idx, fallback) => allKeywords[idx] || titleKws[0] || bodyKws[0] || fallback;
+
         let photoList = [];
+
         if (category === 'restaurant') {
-          const firstMenu = extractWords(formData.menu)[0];
-          const menu = cleanStr(firstMenu) || '대표메뉴';
+          const menus = extractWords(formData.menu).map(cleanStr);
+          const menu1 = menus[0] || '대표메뉴';
+          const menu2 = menus[1] || getKw(1, '인기메뉴');
+
           photoList = [
-            `01_${store}_${mainKw}_${menu}_대표썸네일.png`,
-            `02_${store}_외관전경_간판컷.png`,
-            `03_${store}_내부인테리어_분위기.png`,
-            `04_${store}_메뉴판_가격정보.png`,
-            `05_${store}_${menu}_메인요리전체컷.png`,
-            `06_${store}_${menu}_디테일클로즈업.png`,
-            `07_${store}_${mainKw}_솔직후기마무리.png`
+            `01_${store}_${getKw(0, '맛집추천')}_${menu1}_대표썸네일.png`,
+            `02_${store}_${getKw(1, '매장안내')}_외관전경_간판.png`,
+            `03_${store}_${getKw(2, '분위기맛집')}_내부인테리어.png`,
+            `04_${store}_${getKw(3, '메뉴판정보')}_가격정보.png`,
+            `05_${store}_${menu1}_${getKw(4, '솔직후기')}_메인요리전체.png`,
+            `06_${store}_${menu2}_${getKw(5, '맛도리')}_디테일클로즈업.png`,
+            `07_${store}_${getKw(6, '재방문의사')}_방문총평마무리.png`
           ];
         } else if (category === 'visit') {
-          const purpose = cleanStr(formData.purpose) || '볼거리';
+          const purpose = cleanStr(formData.purpose) || getKw(1, '핫플추천');
+
           photoList = [
-            `01_${store}_${mainKw}_${purpose}_대표썸네일.png`,
-            `02_${store}_입구_외관전경.png`,
-            `03_${store}_내부시설_인테리어.png`,
-            `04_${store}_${purpose}_메인포토존.png`,
-            `05_${store}_내부체험_디테일컷.png`,
-            `06_${store}_${mainKw}_체험현장컷.png`,
-            `07_${store}_${mainKw}_방문총평.png`
+            `01_${store}_${getKw(0, '가볼만한곳')}_${purpose}_대표썸네일.png`,
+            `02_${store}_${getKw(1, '위치안내')}_입구전경.png`,
+            `03_${store}_${getKw(2, '데이트코스')}_내부시설.png`,
+            `04_${store}_${getKw(3, '인생샷포인트')}_메인포토존.png`,
+            `05_${store}_${getKw(4, '체험후기')}_디테일컷.png`,
+            `06_${store}_${getKw(5, '방문꿀팁')}_현장컷.png`,
+            `07_${store}_${getKw(6, '총평후기')}_최종리뷰.png`
           ];
         } else if (category === 'hotel') {
           const room = cleanStr(formData.roomType.split('/')[0]) || '객실';
           const amenity = cleanStr(formData.amenities.split(',')[0]) || '부대시설';
+
           photoList = [
-            `01_${store}_${mainKw}_${room}_대표썸네일.png`,
-            `02_${store}_건물외관_로비.png`,
-            `03_${store}_${room}_객실전경_침실.png`,
-            `04_${store}_${room}_욕실_어메니티.png`,
-            `05_${store}_${amenity}_부대시설.png`,
-            `06_${store}_조식_부페_서비스.png`,
-            `07_${store}_${mainKw}_숙박총평.png`
+            `01_${store}_${getKw(0, '호캉스추천')}_${room}_대표썸네일.png`,
+            `02_${store}_${getKw(1, '숙소위치')}_외관로비.png`,
+            `03_${store}_${room}_${getKw(2, '객실인테리어')}_침실전경.png`,
+            `04_${store}_${room}_${getKw(3, '룸컨디션')}_욕실어메니티.png`,
+            `05_${store}_${amenity}_${getKw(4, '부대시설후기')}.png`,
+            `06_${store}_${getKw(5, '조식후기')}_서비스컷.png`,
+            `07_${store}_${getKw(6, '숙박총평')}_재방문의사.png`
           ];
-        } else {
+        } else { // product
           const pName = cleanStr(formData.productName) || '제품명';
+
           photoList = [
-            `01_${store}_${pName}_${mainKw}_대표썸네일.png`,
-            `02_${store}_${pName}_패키지_언박싱.png`,
-            `03_${pName}_제품본품_디테일.png`,
-            `04_${pName}_제형_성분_디테일.png`,
-            `05_${pName}_실제사용_비포애프터.png`,
-            `06_${pName}_${mainKw}_실사용컷.png`,
-            `07_${store}_${pName}_사용총평.png`
+            `01_${store}_${pName}_${getKw(0, '제품추천')}_대표썸네일.png`,
+            `02_${store}_${pName}_${getKw(1, '언박싱')}_패키지.png`,
+            `03_${pName}_${getKw(2, '솔직리뷰')}_본품디테일.png`,
+            `04_${pName}_${getKw(3, '성분제형')}_사용감.png`,
+            `05_${pName}_${getKw(4, '사용법')}_비포애프터.png`,
+            `06_${pName}_${getKw(5, '실사용컷')}_디테일.png`,
+            `07_${store}_${pName}_${getKw(6, '총평후기')}_마무리.png`
           ];
         }
-        return `[추천 이미지 파일명 (네이버 SEO)]\n` + photoList.map(name => `• ${name}`).join('\n');
+        return photoList;
       };
 
-      // 완전히 상냥한 MZ 톤 추천 댓글 무작위(랜덤) 생성 함수
-      // - 단일 'ㅋ' 사용 금지 ('ㅎㅎ', '히히', '✨', '🥰' 등 사용)
-      // - '선팔' 단어 금지
       const generateFriendlyCommentsText = () => {
         const store = formData.storeName ? formData.storeName.trim() : (formData.productName ? formData.productName.trim() : '여기');
-        
         let pool = [];
 
         if (category === 'restaurant') {
@@ -351,7 +360,6 @@
           ];
         }
 
-        // 배열 셔플 (랜덤 뽑기)
         const shuffled = [...pool].sort(() => 0.5 - Math.random());
         const selected = shuffled.slice(0, 3);
 
@@ -417,10 +425,10 @@
 
         const finalHashtags = generateFormattedHashtags();
         if (finalHashtags) resultText += `\n[해시태그]\n${finalHashtags}\n`;
-        resultText += `\n${generatePhotoNamesText()}\n`;
         resultText += `\n${generateFriendlyCommentsText()}\n`;
 
         setGeneratedResult(resultText);
+        setGeneratedPhotoList(generatePhotoNamesArray());
         setFormData(initialFormState);
       };
 
@@ -438,16 +446,17 @@
           category,
           title: formData.storeName || formData.productName || '제목 없음',
           content: generatedResult,
+          photoNames: generatedPhotoList, // 🌟 이미지 파일명을 독립 항목으로 분리 저장
           date: new Date().toLocaleDateString('ko-KR')
         };
 
         await savePostToFirebase(newPost);
-        alert('클립보드 복사 및 실시간 서버(Firebase) 저장 완료!');
+        alert('초안 복사 및 서버 저장 완료! (추천 이미지 파일명은 별도 칸에 자동 보관되었습니다 🧚‍)');
       };
 
       const handleCopySavedItem = (text) => {
         navigator.clipboard?.writeText(text);
-        alert('해당 초안이 복사되었습니다!');
+        alert('해당 초안 본문이 복사되었습니다!');
       };
 
       const handleDeleteSavedItem = async (id) => {
@@ -456,10 +465,10 @@
         }
       };
 
-      const handleUpdateSavedContent = async (id, updatedText) => {
+      const handleUpdateSavedContent = async (id, updatedText, updatedPhotos) => {
         const targetPost = savedPosts.find(p => p.id === id);
         if (targetPost) {
-          const updated = { ...targetPost, content: updatedText };
+          const updated = { ...targetPost, content: updatedText, photoNames: updatedPhotos };
           await savePostToFirebase(updated);
           alert('수정 사항이 실시간 저장되었습니다!');
         }
@@ -485,7 +494,7 @@
             await setDoc(doc(window.db, "followStats", String(newRecord.id)), newRecord);
             setInputFollower('');
             setInputFollowing('');
-            alert(`${inputDate} 수치가 성공적으로 기록되었습니다!`);
+            alert(`${inputDate} 수치 기록 완료! 🧚‍`);
           } catch (e) {
             console.error("통계 저장 실패:", e);
           }
@@ -698,7 +707,7 @@
                       <label class="text-xs font-semibold text-gray-500 block mb-1">영업시간 / 운영시간 (네이버지도 복사 붙여넣기)</label>
                       <textarea
                         rows="3"
-                        placeholder="월요일 11:00 - 22:00&#10;화요일 11:00 - 22:00 (브레이크타임 자동 무시됨)"
+                        placeholder="월요일 11:00 - 22:00&#10;화요일 11:00 - 22:00"
                         value={formData.operatingHours}
                         onChange={e => handleChange('operatingHours', e.target.value)}
                         class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -802,7 +811,7 @@
                   <label class="text-xs font-semibold text-gray-500 block mb-1">제목 키워드 (띄어쓰기 또는 쉼표 구분)</label>
                   <input
                     type="text"
-                    placeholder="예: 강남역맛집 협찬화장품 데이트코스"
+                    placeholder="예: 강남역맛집 데이트코스 분위기맛집"
                     value={formData.titleKeyword}
                     onChange={e => handleChange('titleKeyword', e.target.value)}
                     class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -813,7 +822,7 @@
                   <label class="text-xs font-semibold text-gray-500 block mb-1">본문 키워드 (띄어쓰기 또는 쉼표 구분)</label>
                   <input
                     type="text"
-                    placeholder="예: 파스타맛집 분위기좋은카페 수분크림"
+                    placeholder="예: 파스타맛집 내돈내산 핫플추천"
                     value={formData.bodyKeyword}
                     onChange={e => handleChange('bodyKeyword', e.target.value)}
                     class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -873,19 +882,46 @@
               </div>
 
               {generatedResult && (
-                <div class="bg-white p-4 rounded-xl shadow-sm space-y-3 border-2 border-indigo-100">
-                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식 (사진파일명 & 추천댓글 자동 결합됨)</div>
+                <div class="bg-white p-4 rounded-xl shadow-sm space-y-4 border-2 border-indigo-100">
+                  <div class="text-sm font-bold text-slate-800">📋 생성된 초안 양식 (본문)</div>
                   <textarea
-                    rows="12"
+                    rows="10"
                     readOnly
                     value={generatedResult}
                     class="w-full border rounded-lg p-3 text-xs bg-slate-50 text-slate-800 font-mono resize-y"
                   />
+
+                  {/* 🌟 추천 이미지 파일명 전용 구역 */}
+                  {generatedPhotoList.length > 0 && (
+                    <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3.5 space-y-2">
+                      <div class="text-xs font-bold text-indigo-950 flex items-center justify-between">
+                        <span class="flex items-center gap-1">📷 네이버 SEO 추천 이미지 파일명 (다양한 키워드 조합)</span>
+                        <span class="text-[11px] font-normal text-indigo-600">독립 항목으로 보관됩니다</span>
+                      </div>
+                      <div class="space-y-1.5">
+                        {generatedPhotoList.map((photoName, idx) => (
+                          <div key={idx} class="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-indigo-100 text-xs">
+                            <span class="font-mono text-gray-700 truncate">{photoName}</span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard?.writeText(photoName);
+                                alert(`파일명이 복사되었습니다:\n${photoName}`);
+                              }}
+                              class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded text-[11px] shrink-0 ml-2 transition"
+                            >
+                              📋 복사
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={handleCopyAndSave}
                     class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition"
                   >
-                    📋 복사 및 실시간 서버 저장
+                    📋 초안 복사 및 서버 저장하기
                   </button>
                 </div>
               )}
@@ -944,7 +980,6 @@
           {/* 📊 팔로우 통계 탭 화면 */}
           {activeTab === 'stats' && (
             <div class="space-y-4">
-              {/* 수치 입력 폼 */}
               <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
                 <div class="text-sm font-bold text-slate-800 border-b pb-2 flex items-center justify-between">
                   <span>📈 팔로워 / 팔로잉 수치 기록</span>
@@ -991,13 +1026,11 @@
                 </button>
               </div>
 
-              {/* 기간별 성장 통계 리포트 카드 */}
               {periodStats && (
                 <div class="bg-gradient-to-r from-indigo-900 to-slate-800 text-white p-4 rounded-xl shadow-sm space-y-3">
                   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-700/60 pb-2">
                     <span class="text-xs font-bold text-indigo-200">📊 {periodStats.periodName} 성과 요약 리포트</span>
                     
-                    {/* 기간 선택 필터 버튼 */}
                     <div class="flex gap-1 bg-indigo-950/80 p-0.5 rounded-lg border border-indigo-700/50">
                       {[
                         { key: 'week', label: '1주일' },
@@ -1047,10 +1080,8 @@
                 </div>
               )}
 
-              {/* 막대 그래프 컴포넌트 */}
               <FollowerBarChart data={chartData} />
 
-              {/* 히스토리 타임라인 목록 */}
               <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
                 <div class="text-sm font-bold text-slate-800 border-b pb-2">📜 팔로우 기록 히스토리</div>
 
@@ -1089,7 +1120,6 @@
       );
     }
 
-    // Canvas 기반 시각화 막대 그래프 컴포넌트
     function FollowerBarChart({ data }) {
       const canvasRef = useRef(null);
       const [tooltip, setTooltip] = useState(null);
@@ -1211,7 +1241,7 @@
         <div class="bg-white p-4 rounded-xl shadow-sm space-y-2">
           <div class="text-sm font-bold text-slate-800 border-b pb-2 flex justify-between items-center">
             <span>📊 팔로워 수치 추이 (막대 그래프)</span>
-            <span class="text-[11px] font-normal text-gray-400">마우스를 올라놓으면 세부 수치가 표시됩니다</span>
+            <span class="text-[11px] font-normal text-gray-400">마우스를 올리면 세부 수치가 표시됩니다</span>
           </div>
 
           <div class="relative w-full h-56">
@@ -1240,36 +1270,20 @@
     function SavedItemCard({ item, platformNames, categoryNames, onCopy, onDelete, onUpdate }) {
       const [isEditing, setIsEditing] = useState(false);
       const [editContent, setEditContent] = useState(item.content);
-
-      const parsePhotoNames = (text) => {
-        if (!text) return [];
-        const lines = text.split('\n');
-        return lines
-          .map(line => line.trim())
-          .filter(line => line.startsWith('• ') && line.includes('.png'));
-      };
-
-      const photoNames = parsePhotoNames(editContent);
+      const [editPhotos, setEditPhotos] = useState(item.photoNames || []);
 
       const handleSaveEdit = () => {
-        onUpdate(item.id, editContent);
+        onUpdate(item.id, editContent, editPhotos);
         setIsEditing(false);
       };
 
-      const handleKeyDown = (e) => {
-        if (!isEditing && !(e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-        }
-      };
-
-      const handleCopySingleFileName = (fileNameLine) => {
-        const cleanFileName = fileNameLine.replace(/^•\s*/, '');
-        navigator.clipboard?.writeText(cleanFileName);
-        alert(`파일명이 복사되었습니다:\n${cleanFileName}`);
+      const handleCopySingleFileName = (fileName) => {
+        navigator.clipboard?.writeText(fileName);
+        alert(`파일명이 복사되었습니다:\n${fileName}`);
       };
 
       return (
-        <div class="border rounded-lg p-3 bg-gray-50 space-y-3">
+        <div class="border rounded-xl p-3.5 bg-gray-50 space-y-3">
           <div class="flex justify-between items-center text-xs">
             <span class="font-bold text-indigo-600">{platformNames[item.platform]} | {categoryNames[item.category]}</span>
             <span class="text-gray-400">{item.date}</span>
@@ -1277,35 +1291,34 @@
           <div class="font-bold text-slate-800">{item.title}</div>
           
           <textarea
-            rows={isEditing ? 10 : 6}
+            rows={isEditing ? 8 : 5}
             value={editContent}
             onChange={e => setEditContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            class={`w-full border rounded p-2 text-xs transition resize-y overflow-auto cursor-text ${
-              isEditing ? 'bg-white text-slate-900 border-indigo-500 font-mono shadow-inner' : 'bg-white text-gray-700 border-gray-300'
+            disabled={!isEditing}
+            class={`w-full border rounded-lg p-2.5 text-xs transition resize-y overflow-auto ${
+              isEditing ? 'bg-white text-slate-900 border-indigo-500 font-mono shadow-inner' : 'bg-white text-gray-700 border-gray-200'
             }`}
           />
 
-          {photoNames.length > 0 && (
-            <div class="bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5 space-y-1.5">
-              <div class="text-xs font-bold text-indigo-900 mb-1 flex items-center gap-1">
-                <span>📷</span> 추천 이미지 파일명 한 줄 복사
+          {/* 🌟 추천 이미지 파일명 전용 독립 칸 (본문과 완전 분리) */}
+          {editPhotos && editPhotos.length > 0 && (
+            <div class="bg-indigo-50/80 border border-indigo-100 rounded-lg p-3 space-y-2">
+              <div class="text-xs font-bold text-indigo-900 flex items-center justify-between">
+                <span>📷 독립 저장된 추천 이미지 파일명 (한 줄 복사)</span>
+                <span class="text-[10px] text-indigo-500 font-normal">{editPhotos.length}개 파일명</span>
               </div>
               <div class="space-y-1 max-h-48 overflow-y-auto pr-1">
-                {photoNames.map((photoLine, idx) => {
-                  const cleanName = photoLine.replace(/^•\s*/, '');
-                  return (
-                    <div key={idx} class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded border border-gray-200 text-xs gap-2">
-                      <span class="font-mono text-gray-700 truncate flex-1">{cleanName}</span>
-                      <button
-                        onClick={() => handleCopySingleFileName(photoLine)}
-                        class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded text-[11px] shrink-0 transition"
-                      >
-                        📋 복사
-                      </button>
-                    </div>
-                  );
-                })}
+                {editPhotos.map((photoName, idx) => (
+                  <div key={idx} class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded border border-gray-200 text-xs">
+                    <span class="font-mono text-gray-700 truncate flex-1">{photoName}</span>
+                    <button
+                      onClick={() => handleCopySingleFileName(photoName)}
+                      class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded text-[11px] shrink-0 ml-2 transition"
+                    >
+                      📋 복사
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1315,13 +1328,13 @@
               <>
                 <button
                   onClick={handleSaveEdit}
-                  class="px-3 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded hover:bg-indigo-700"
+                  class="px-3 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700"
                 >
                   💾 저장
                 </button>
                 <button
-                  onClick={() => { setEditContent(item.content); setIsEditing(false); }}
-                  class="px-3 py-1.5 bg-gray-400 text-white font-bold text-xs rounded hover:bg-gray-500"
+                  onClick={() => { setEditContent(item.content); setEditPhotos(item.photoNames || []); setIsEditing(false); }}
+                  class="px-3 py-1.5 bg-gray-400 text-white font-bold text-xs rounded-lg hover:bg-gray-500"
                 >
                   취소
                 </button>
@@ -1330,19 +1343,19 @@
               <>
                 <button
                   onClick={() => setIsEditing(true)}
-                  class="px-3 py-1.5 bg-slate-600 text-white font-bold text-xs rounded hover:bg-slate-700"
+                  class="px-3 py-1.5 bg-slate-600 text-white font-bold text-xs rounded-lg hover:bg-slate-700"
                 >
                   ✏️ 수정
                 </button>
                 <button
                   onClick={() => onCopy(item.content)}
-                  class="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded hover:bg-emerald-700"
+                  class="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700"
                 >
-                  📋 전체 복사
+                  📋 초안 본문 복사
                 </button>
                 <button
                   onClick={() => onDelete(item.id)}
-                  class="px-3 py-1.5 bg-rose-500 text-white font-bold text-xs rounded hover:bg-rose-600"
+                  class="px-3 py-1.5 bg-rose-500 text-white font-bold text-xs rounded-lg hover:bg-rose-600"
                 >
                   🗑️ 삭제
                 </button>
