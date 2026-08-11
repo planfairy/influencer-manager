@@ -34,7 +34,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 글로벌 객체로 전송하여 React에서 참조 가능하도록 설정
     window.db = db;
     window.dbFunctions = { collection, onSnapshot, doc, setDoc, deleteDoc };
   </script>
@@ -61,14 +60,14 @@
       parking: '',
       reservation: '',
       menu: '',
-      providedItems: '', // 🌟 제공받은 내역 필드
+      providedItems: '', // 🌟 제공받은 내역
       parkingInfo: '',
       roomType: '',
       amenities: ''
     };
 
     function App() {
-      const [activeTab, setActiveTab] = useState('editor'); // editor, list, stats
+      const [activeTab, setActiveTab] = useState('editor');
       const [platform, setPlatform] = useState('instagram');
       const [category, setCategory] = useState('product');
 
@@ -81,7 +80,6 @@
       const [generatedPhotoList, setGeneratedPhotoList] = useState([]);
       const [lastAutoSaveTime, setLastAutoSaveTime] = useState('');
 
-      // 팔로우 통계 관련 State
       const [followHistory, setFollowHistory] = useState([]);
       const [inputFollower, setInputFollower] = useState('');
       const [inputFollowing, setInputFollowing] = useState('');
@@ -89,14 +87,12 @@
       
       const [statsPeriod, setStatsPeriod] = useState('week');
 
-      // Firebase Firestore 실시간 연동 (스마트폰/PC 공유)
       useEffect(() => {
         const checkDbTimer = setInterval(() => {
           if (window.db && window.dbFunctions) {
             clearInterval(checkDbTimer);
             const { collection, onSnapshot } = window.dbFunctions;
 
-            // 1. 초안 저장 목록 실시간 동기화
             const postsRef = collection(window.db, "savedPosts");
             onSnapshot(postsRef, (snapshot) => {
               const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -104,7 +100,6 @@
               setSavedPosts(postsData);
             }, (error) => console.error("Firebase Posts 불러오기 오류:", error));
 
-            // 2. 팔로우 통계 실시간 동기화
             const statsRef = collection(window.db, "followStats");
             onSnapshot(statsRef, (snapshot) => {
               const statsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -127,7 +122,6 @@
         categoryRef.current = category;
       }, [formData, platform, category]);
 
-      // 3분 주기의 작성 중 임시 자동저장 (기기 로컬 보관)
       useEffect(() => {
         const interval = setInterval(() => {
           const hasContent = Object.values(formDataRef.current).some(val => val.trim() !== '');
@@ -253,7 +247,6 @@
         return lines.join('\n');
       };
 
-      // 다양성 조합 SEO 사진 파일명 생성
       const generatePhotoNamesArray = () => {
         const cleanStr = (str) => str ? str.trim().replace(/[\s,]+/g, '_') : '';
         const store = cleanStr(formData.storeName) || '장소명';
@@ -404,7 +397,7 @@
           resultText += addField('찾아가는 길', formData.directions);
           resultText += addField('주차 정보', formData.parking);
           resultText += addField('예약/입장 정보', formData.reservation);
-          resultText += addField('제공받은 내역', formData.providedItems); // 🌟 최종 양식 반영
+          resultText += addField('제공받은 내역', formData.providedItems); // 🌟 제공받은 내역 적용
           resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
           resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
           resultText += addField('광고주 요청사항', formData.requestNote);
@@ -473,7 +466,6 @@
         }
       };
 
-      // 팔로우 통계 기록 Firebase 저장
       const handleAddFollowRecord = async () => {
         if (!inputFollower || !inputFollowing) {
           alert('팔로워 수와 팔로잉 수를 정확히 입력해 주세요!');
@@ -660,8 +652,9 @@
                 </div>
               </div>
 
+              {/* 🌟 폼 렌더링 구역 전면 개편 */}
               <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
-                <div class="text-sm font-bold text-slate-800 border-b pb-2">📝 상세 내용 입력</div>
+                <div class="text-sm font-bold text-slate-800 border-b pb-2">📝 상세 내용 입력 ({categoryNames[category]})</div>
 
                 <div>
                   <label class="text-xs font-semibold text-gray-500 block mb-1">상호명 / 장소명 / 숙소명</label>
@@ -674,6 +667,7 @@
                   />
                 </div>
 
+                {/* 🛍️ 제품리뷰 필드 */}
                 {category === 'product' && (
                   <div>
                     <label class="text-xs font-semibold text-gray-500 block mb-1">사용 제품명</label>
@@ -687,23 +681,21 @@
                   </div>
                 )}
 
-                {(category === 'restaurant' || category === 'visit' || category === 'hotel') && (
-                  <div>
-                    <label class="text-xs font-semibold text-gray-500 block mb-1">위치 / 주소 / 지역 (장소 주소)</label>
-                    <input
-                      type="text"
-                      placeholder="예: 서울 강남구 테헤란로 123"
-                      value={formData.location}
-                      onChange={e => handleChange('location', e.target.value)}
-                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
-                    />
-                  </div>
-                )}
-
-                {(category === 'restaurant' || category === 'visit') && (
+                {/* 🍕 맛집 필드 */}
+                {category === 'restaurant' && (
                   <>
                     <div>
-                      <label class="text-xs font-semibold text-gray-500 block mb-1">영업시간 / 운영시간 (네이버지도 복사 붙여넣기)</label>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">위치 / 주소 / 지역</label>
+                      <input
+                        type="text"
+                        placeholder="예: 서울 강남구 테헤란로 123"
+                        value={formData.location}
+                        onChange={e => handleChange('location', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">영업시간</label>
                       <textarea
                         rows="3"
                         placeholder="월요일 11:00 - 22:00&#10;화요일 11:00 - 22:00"
@@ -713,10 +705,10 @@
                       />
                     </div>
                     <div>
-                      <label class="text-xs font-semibold text-gray-500 block mb-1">가게 / 장소 소개</label>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">가게 소개</label>
                       <input
                         type="text"
-                        placeholder="예: 성수동 감성 가득한 대표 대형 스튜디오 카페"
+                        placeholder="예: 성수동 감성 가득한 분위기 맛집"
                         value={formData.storeIntro}
                         onChange={e => handleChange('storeIntro', e.target.value)}
                         class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -726,7 +718,7 @@
                       <label class="text-xs font-semibold text-gray-500 block mb-1">찾아가는 길</label>
                       <input
                         type="text"
-                        placeholder="예: 강남역 1번 출구 도보 3분 거리"
+                        placeholder="예: 강남역 1번 출구 도보 3분"
                         value={formData.directions}
                         onChange={e => handleChange('directions', e.target.value)}
                         class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -736,7 +728,83 @@
                       <label class="text-xs font-semibold text-gray-500 block mb-1">주차 정보</label>
                       <input
                         type="text"
-                        placeholder="예: 건물 지하 주차장 2시간 무료"
+                        placeholder="예: 지하 주차장 2시간 무료"
+                        value={formData.parking}
+                        onChange={e => handleChange('parking', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">예약 정보</label>
+                      <input
+                        type="text"
+                        placeholder="예: 네이버 예약 가능"
+                        value={formData.reservation}
+                        onChange={e => handleChange('reservation', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">주문한 메뉴 (띄어쓰기 또는 쉼표 구분)</label>
+                      <input
+                        type="text"
+                        placeholder="예: 파스타 스테이크 에이드"
+                        value={formData.menu}
+                        onChange={e => handleChange('menu', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* 📍 방문/장소 필드 (독립 분리 완료) */}
+                {category === 'visit' && (
+                  <>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">위치 / 주소 / 지역</label>
+                      <input
+                        type="text"
+                        placeholder="예: 서울 강남구 테헤란로 123"
+                        value={formData.location}
+                        onChange={e => handleChange('location', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">영업시간 / 운영시간</label>
+                      <textarea
+                        rows="3"
+                        placeholder="월요일 11:00 - 22:00&#10;화요일 11:00 - 22:00"
+                        value={formData.operatingHours}
+                        onChange={e => handleChange('operatingHours', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">장소 소개</label>
+                      <input
+                        type="text"
+                        placeholder="예: 성수동 감성 가득한 대형 스튜디오"
+                        value={formData.storeIntro}
+                        onChange={e => handleChange('storeIntro', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">찾아가는 길</label>
+                      <input
+                        type="text"
+                        placeholder="예: 강남역 1번 출구 도보 3분"
+                        value={formData.directions}
+                        onChange={e => handleChange('directions', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">주차 정보</label>
+                      <input
+                        type="text"
+                        placeholder="예: 인근 공영주차장 이용"
                         value={formData.parking}
                         onChange={e => handleChange('parking', e.target.value)}
                         class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
@@ -746,44 +814,39 @@
                       <label class="text-xs font-semibold text-gray-500 block mb-1">예약 / 입장 정보</label>
                       <input
                         type="text"
-                        placeholder="예: 네이버 사전 예약 필수, 현장 예매 가능"
+                        placeholder="예: 네이버 사전 예약 필수"
                         value={formData.reservation}
                         onChange={e => handleChange('reservation', e.target.value)}
                         class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
                       />
                     </div>
+                    {/* 🌟 방문 목적/특징 완벽 제거 후 단독 추가된 제공받은 내역 */}
+                    <div>
+                      <label class="text-xs font-bold text-indigo-700 block mb-1">🎁 제공받은 내역</label>
+                      <input
+                        type="text"
+                        placeholder="예: 입장권 2매, 음료 2잔 서비스"
+                        value={formData.providedItems}
+                        onChange={e => handleChange('providedItems', e.target.value)}
+                        class="w-full border-2 border-indigo-200 rounded-lg p-2.5 text-sm bg-indigo-50/30 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
                   </>
                 )}
 
-                {category === 'restaurant' && (
-                  <div>
-                    <label class="text-xs font-semibold text-gray-500 block mb-1">주문한 메뉴 (띄어쓰기 또는 쉼표 구분)</label>
-                    <input
-                      type="text"
-                      placeholder="예: 파스타 스테이크 에이드"
-                      value={formData.menu}
-                      onChange={e => handleChange('menu', e.target.value)}
-                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
-                    />
-                  </div>
-                )}
-
-                {/* 🌟 방문/장소 선택 시 무조건 출력되는 제공받은 내역 칸 (방문목적/특징 삭제완료) */}
-                {category === 'visit' && (
-                  <div>
-                    <label class="text-xs font-semibold text-gray-500 block mb-1">제공받은 내역</label>
-                    <input
-                      type="text"
-                      placeholder="예: 자유입장권 2매, 음료 2잔 서비스"
-                      value={formData.providedItems}
-                      onChange={e => handleChange('providedItems', e.target.value)}
-                      class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
-                    />
-                  </div>
-                )}
-
+                {/* 🏨 호텔/숙소 필드 */}
                 {category === 'hotel' && (
                   <>
+                    <div>
+                      <label class="text-xs font-semibold text-gray-500 block mb-1">위치 / 지역</label>
+                      <input
+                        type="text"
+                        placeholder="예: 서울 강남구 테헤란로 123"
+                        value={formData.location}
+                        onChange={e => handleChange('location', e.target.value)}
+                        class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
+                      />
+                    </div>
                     <div>
                       <label class="text-xs font-semibold text-gray-500 block mb-1">룸 타입 / 체크인·아웃</label>
                       <input
@@ -807,6 +870,7 @@
                   </>
                 )}
 
+                {/* 공통 키워드 및 본문 필드 */}
                 <div>
                   <label class="text-xs font-semibold text-gray-500 block mb-1">제목 키워드 (띄어쓰기 또는 쉼표 구분)</label>
                   <input
