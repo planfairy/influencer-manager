@@ -61,7 +61,7 @@
       parking: '',
       reservation: '',
       menu: '',
-      providedItems: '',
+      providedItems: '', // 🌟 제공받은 내역 필드
       parkingInfo: '',
       roomType: '',
       amenities: ''
@@ -253,7 +253,7 @@
         return lines.join('\n');
       };
 
-      // 입력된 다양한 키워드를 조합하는 SEO 사진 파일명 생성 로직
+      // 다양성 조합 SEO 사진 파일명 생성
       const generatePhotoNamesArray = () => {
         const cleanStr = (str) => str ? str.trim().replace(/[\s,]+/g, '_') : '';
         const store = cleanStr(formData.storeName) || '장소명';
@@ -281,7 +281,7 @@
             `07_${store}_${getKw(6, '재방문의사')}_방문총평마무리.png`
           ];
         } else if (category === 'visit') {
-          const provided = cleanStr(formData.providedItems) || getKw(1, '체험내역');
+          const provided = cleanStr(formData.providedItems) || getKw(1, '제공내역');
 
           photoList = [
             `01_${store}_${getKw(0, '가볼만한곳')}_${provided}_대표썸네일.png`,
@@ -404,7 +404,7 @@
           resultText += addField('찾아가는 길', formData.directions);
           resultText += addField('주차 정보', formData.parking);
           resultText += addField('예약/입장 정보', formData.reservation);
-          resultText += addField('제공받은 내역', formData.providedItems);
+          resultText += addField('제공받은 내역', formData.providedItems); // 🌟 최종 양식 반영
           resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
           resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
           resultText += addField('광고주 요청사항', formData.requestNote);
@@ -768,12 +768,13 @@
                   </div>
                 )}
 
+                {/* 🌟 방문/장소 선택 시 무조건 출력되는 제공받은 내역 칸 (방문목적/특징 삭제완료) */}
                 {category === 'visit' && (
                   <div>
                     <label class="text-xs font-semibold text-gray-500 block mb-1">제공받은 내역</label>
                     <input
                       type="text"
-                      placeholder="예: 입장권 2매, 체험 프로그램 제공"
+                      placeholder="예: 자유입장권 2매, 음료 2잔 서비스"
                       value={formData.providedItems}
                       onChange={e => handleChange('providedItems', e.target.value)}
                       class="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-indigo-500"
