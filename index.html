@@ -66,35 +66,7 @@
     };
 
     const mzComments = {
-      fixed: '맛집, 문화 리뷰어 계획요정이라고 합니다! 소통해요 ❤',
-      muk8: [
-        '피드 피지컬 미쳤네요 🤤 맛있는 거 공유하면서 찐하게 먹8하고 소통해요 ✨',
-        '맛도리 피드 탐방하다가 홀린 듯 들어옴 ㅋㅋㅋ 저랑 먹8하고 맞팔 소통해요! 🤝',
-        '비주얼 사기네요 🔥 맛집에 진심인 편이라 먼저 선팔 찍고 갑니다 찐하게 먹8 소통해요 🤤',
-        '아 피드 보다가 침 흘릴 뻔 🫠 같이 맛있는 거 정보 공유하면서 먹8 소통해요 ✨',
-        '맛잘알 냄새 솔솔 나서 지나칠 수가 없었음 ㅋ 당장 선팔 누르고 가요 먹8 소통해요! 🔥'
-      ],
-      restaurant: [
-        '아 미쳤다... 화면 넘어 맛있는 냄새 나는 것 같아요 🤤 진심 배고파서 현기증 남',
-        '여기 저장해두고 조만간 부수러 갑니다... 비주얼 진짜 사기네요 🔥',
-        '맛집 탐지기 성능 미쳤다 ㅋㅋㅋ 내 입으로 당장 수송 완료하고 싶음 ㅠㅠ',
-        '아니 사장님 비주얼 무슨 일임?🫠 당장 내 입으로 직행시켜야 함 ㅋㅋㅋ',
-        '솔직히 이건 안 가보면 손해임 ㅋ 지도에 핀 찍어두고 약속 장소로 확정 완 ✨'
-      ],
-      mood: [
-        '분위기 뭔데 진짜... 감성 한 스푼에 도파민 터짐 ✨ 찍으면 다 인생샷각 아니냐구',
-        '공간 감성 미쳤네요... 사장님 인테리어에 영혼 갈아 넣으신 듯 ☕️',
-        '여기 가면 인스타 업로드 최소 5개 가능 ㅋ 분위기 맛집 인정입니다',
-        '여기가 바로 내 도파민 충전소인가...✨ 비주얼부터 합격 목걸이 수여합니다',
-        '분위기 미쳐서 저장 누르다가 화면 뚫릴 뻔함 ㅋㅋㅋ 조만간 갑니다 🔥'
-      ],
-      date: [
-        '와 뷰 무슨 일... 이번 주말 데이트 코스 이걸로 종결합니다 힐링 그 자체 🔥',
-        '여기 체크인하자마자 극락 예약이네요... 당장 짐 싸서 가고 싶음 🥺',
-        '데이트 코스 고민 끝! 태그해서 끌고 갈 사람 구함 ㅋㅋㅋ 너무 완벽하잖아',
-        '여기 예약하는 사람 최소 센스 천재 소리 듣는다 ㅋ 찜해둡니다 ✨',
-        '힐링 그 자체네요... 당장 주말에 스케줄 비우고 달려가야 할 비주얼 🌿'
-      ]
+      fixed: '맛집, 문화 리뷰어 계획요정이라고 합니다! 소통해요 ❤'
     };
 
     function App() {
@@ -108,6 +80,7 @@
 
       const [formData, setFormData] = useState(initialFormState);
       const [generatedResult, setGeneratedResult] = useState('');
+      const [generatedHashtags, setGeneratedHashtags] = useState('');
       const [lastAutoSaveTime, setLastAutoSaveTime] = useState('');
 
       // 👥 팔로우 관리 관련 State
@@ -139,11 +112,7 @@
       const [hasLocalData, setHasLocalData] = useState(false);
 
       const [editableComments, setEditableComments] = useState({
-        fixed: mzComments.fixed,
-        muk8: '',
-        restaurant: '',
-        mood: '',
-        date: ''
+        fixed: mzComments.fixed
       });
 
       useEffect(() => {
@@ -158,11 +127,7 @@
       // 🔥 Firebase Cloud Firestore 실시간 구독
       useEffect(() => {
         setEditableComments({
-          fixed: mzComments.fixed,
-          muk8: mzComments.muk8[Math.floor(Math.random() * mzComments.muk8.length)],
-          restaurant: mzComments.restaurant[Math.floor(Math.random() * mzComments.restaurant.length)],
-          mood: mzComments.mood[Math.floor(Math.random() * mzComments.mood.length)],
-          date: mzComments.date[Math.floor(Math.random() * mzComments.date.length)]
+          fixed: mzComments.fixed
         });
 
         // 1. 저장된 초안 목록
@@ -607,63 +572,6 @@
         return lines.join('\n');
       };
 
-      const generatePhotoNamesText = () => {
-        const cleanStr = (str) => str ? str.trim().replace(/[\s,]+/g, '_') : '';
-        const store = cleanStr(formData.storeName) || '장소명';
-        const firstTitleKw = extractWords(formData.titleKeyword)[0];
-        const mainKw = cleanStr(firstTitleKw) || '대표키워드';
-        
-        let photoList = [];
-        if (category === 'restaurant') {
-          const firstMenu = extractWords(formData.menu)[0];
-          const menu = cleanStr(firstMenu) || '대표메뉴';
-          photoList = [
-            `01_${store}_${mainKw}_${menu}_대표썸네일.png`,
-            `02_${store}_외관전경_간판컷.png`,
-            `03_${store}_내부인테리어_분위기.png`,
-            `04_${store}_메뉴판_가격정보.png`,
-            `05_${store}_${menu}_메인요리전체컷.png`,
-            `06_${store}_${menu}_디테일클로즈업.png`,
-            `07_${store}_${mainKw}_솔직후기마무리.png`
-          ];
-        } else if (category === 'visit') {
-          const purpose = cleanStr(formData.purpose) || '볼거리';
-          photoList = [
-            `01_${store}_${mainKw}_${purpose}_대표썸네일.png`,
-            `02_${store}_입구_외관전경.png`,
-            `03_${store}_내부시설_인테리어.png`,
-            `04_${store}_${purpose}_메인포토존.png`,
-            `05_${store}_내부체험_디테일컷.png`,
-            `06_${store}_${mainKw}_체험현장컷.png`,
-            `07_${store}_${mainKw}_방문총평.png`
-          ];
-        } else if (category === 'hotel') {
-          const room = cleanStr(formData.roomType.split('/')[0]) || '객실';
-          const amenity = cleanStr(formData.amenities.split(',')[0]) || '부대시설';
-          photoList = [
-            `01_${store}_${mainKw}_${room}_대표썸네일.png`,
-            `02_${store}_건물외관_로비.png`,
-            `03_${store}_${room}_객실전경_침실.png`,
-            `04_${store}_${room}_욕실_어메니티.png`,
-            `05_${store}_${amenity}_부대시설.png`,
-            `06_${store}_조식_부페_서비스.png`,
-            `07_${store}_${mainKw}_숙박총평.png`
-          ];
-        } else {
-          const pName = cleanStr(formData.productName) || '제품명';
-          photoList = [
-            `01_${store}_${pName}_${mainKw}_대표썸네일.png`,
-            `02_${store}_${pName}_패키지_언박싱.png`,
-            `03_${pName}_제품본품_디테일.png`,
-            `04_${pName}_제형_성분_디테일.png`,
-            `05_${pName}_실제사용_비포애프터.png`,
-            `06_${pName}_${mainKw}_실사용컷.png`,
-            `07_${store}_${pName}_사용총평.png`
-          ];
-        }
-        return `[추천 이미지 파일명 (네이버 SEO)]\n` + photoList.map(name => `• ${name}`).join('\n');
-      };
-
       const handleGenerateDraft = () => {
         let resultText = '';
         const addField = (label, value) => value.trim() ? `${label}: ${value.trim()}\n` : `${label}:\n`;
@@ -721,10 +629,9 @@
         }
 
         const finalHashtags = generateFormattedHashtags();
-        if (finalHashtags) resultText += `\n[해시태그]\n${finalHashtags}\n`;
-        resultText += `\n${generatePhotoNamesText()}\n`;
 
         setGeneratedResult(resultText);
+        setGeneratedHashtags(finalHashtags);
       };
 
       const handleCopyAndSave = async () => {
@@ -741,6 +648,7 @@
           category,
           title: formData.storeName || formData.productName || '제목 없음',
           content: generatedResult,
+          hashtags: generatedHashtags,
           date: new Date().toLocaleDateString('ko-KR')
         };
 
@@ -1116,13 +1024,34 @@
 
               {generatedResult && (
                 <div class="bg-white p-4 rounded-xl shadow-sm space-y-3 border-2 border-indigo-100">
-                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식 (사진파일명 자동 결합됨)</div>
+                  <div class="text-sm font-bold text-slate-800">📋 최종 완성 양식</div>
                   <textarea
                     rows="10"
                     readOnly
                     value={generatedResult}
                     class="w-full border rounded-lg p-3 text-xs bg-slate-50 text-slate-800 font-mono resize-y"
                   />
+
+                  {generatedHashtags && (
+                    <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
+                      <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-indigo-700">🏷️ 해시태그</span>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(generatedHashtags)}
+                          class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
+                        >
+                          📋 해시태그만 복사
+                        </button>
+                      </div>
+                      <textarea
+                        rows="3"
+                        readOnly
+                        value={generatedHashtags}
+                        class="w-full border rounded-lg p-2 text-xs bg-white text-indigo-900 font-mono resize-y"
+                      />
+                    </div>
+                  )}
+
                   <button
                     onClick={handleCopyAndSave}
                     class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition"
@@ -1270,7 +1199,6 @@
               <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl shadow-sm border border-purple-200 space-y-2">
                 <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
                   <span class="text-xs font-bold text-purple-700">💬 오늘의 MZ 추천 댓글 (수정 및 드래그 복사 가능)</span>
-                  <span class="text-[10px] text-purple-500 font-semibold">새로고침 시 랜던 변경</span>
                 </div>
 
                 <div class="space-y-2 pt-1 text-xs max-h-56 overflow-y-auto pr-1">
@@ -1285,70 +1213,6 @@
                     <button
                       onClick={() => copyTextToClipboard(editableComments.fixed)}
                       class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
-                    >
-                      복사
-                    </button>
-                  </div>
-
-                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-200 shadow-2xs gap-2">
-                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🤝 먹8:</span>
-                    <input
-                      type="text"
-                      value={editableComments.muk8}
-                      onChange={e => handleCommentChange('muk8', e.target.value)}
-                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
-                    />
-                    <button
-                      onClick={() => copyTextToClipboard(editableComments.muk8)}
-                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
-                    >
-                      복사
-                    </button>
-                  </div>
-
-                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
-                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🍕 맛집:</span>
-                    <input
-                      type="text"
-                      value={editableComments.restaurant}
-                      onChange={e => handleCommentChange('restaurant', e.target.value)}
-                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
-                    />
-                    <button
-                      onClick={() => copyTextToClipboard(editableComments.restaurant)}
-                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
-                    >
-                      복사
-                    </button>
-                  </div>
-
-                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
-                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">☕️ 분위기:</span>
-                    <input
-                      type="text"
-                      value={editableComments.mood}
-                      onChange={e => handleCommentChange('mood', e.target.value)}
-                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
-                    />
-                    <button
-                      onClick={() => copyTextToClipboard(editableComments.mood)}
-                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
-                    >
-                      복사
-                    </button>
-                  </div>
-
-                  <div class="flex items-center justify-between bg-white p-1.5 rounded border border-purple-100 shadow-2xs gap-2">
-                    <span class="text-[11px] font-bold text-purple-600 whitespace-nowrap pl-1">🏨 데이트:</span>
-                    <input
-                      type="text"
-                      value={editableComments.date}
-                      onChange={e => handleCommentChange('date', e.target.value)}
-                      class="w-full font-semibold text-slate-700 bg-transparent focus:outline-none text-xs"
-                    />
-                    <button
-                      onClick={() => copyTextToClipboard(editableComments.date)}
-                      class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] whitespace-nowrap transition"
                     >
                       복사
                     </button>
