@@ -641,7 +641,6 @@
           resultText += addField('찾아가는 길', formData.directions);
           resultText += addField('주차 정보', formData.parking);
           resultText += addField('예약/입장 정보', formData.reservation);
-          resultText += addField('방문 목적/특징', formData.purpose);
           resultText += addField('제목 키워드', formatKeywords(formData.titleKeyword));
           resultText += addField('본문 키워드', formatKeywords(formData.bodyKeyword));
           resultText += addField('광고주 요청사항', formData.requestNote);
@@ -824,9 +823,9 @@
                 <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">2. 카테고리 선택</div>
                 <div class="flex gap-2">
                   {[
-                    { key: 'product', label: '🛍️ 제품리뷰' },
                     { key: 'restaurant', label: '🍕 맛집' },
                     { key: 'visit', label: '📍 방문/장소' },
+                    { key: 'product', label: '🛍️ 제품리뷰' },
                     { key: 'hotel', label: '🏨 호텔/숙소' }
                   ].map(item => (
                     <button
@@ -943,19 +942,6 @@
                       placeholder="예: 파스타 스테이크 에이드"
                       value={formData.menu}
                       onChange={e => handleChange('menu', e.target.value)}
-                      class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400"
-                    />
-                  </div>
-                )}
-
-                {category === 'visit' && (
-                  <div>
-                    <label class="text-[11px] font-bold text-slate-400 tracking-wide block mb-1.5">방문 목적 / 특징</label>
-                    <input
-                      type="text"
-                      placeholder="예: 데이트코스 추천, 아이와 가볼만한 곳"
-                      value={formData.purpose}
-                      onChange={e => handleChange('purpose', e.target.value)}
                       class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400"
                     />
                   </div>
