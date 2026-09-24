@@ -123,6 +123,7 @@
       const [followSubTab, setFollowSubTab] = useState('follow');
       const [unfollowUsernameInput, setUnfollowUsernameInput] = useState('');
       const [unfollowDateInput, setUnfollowDateInput] = useState(getTodayString());
+      const [unfollowList, setUnfollowList] = useState([]);
       const [clickedIds, setClickedIds] = useState([]);
 
       // 내 계정 수치
@@ -180,6 +181,11 @@
           setFollowList(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
         });
 
+        // 3-1. 언팔 관리 리스트
+        const unsubUnfollows = db.collection('unfollowList').onSnapshot(snapshot => {
+          setUnfollowList(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
         // 4. 클릭 상태
         const unsubClicked = db.collection('appStats').doc('clickedIds').onSnapshot(doc => {
           if (doc.exists) setClickedIds(doc.data().ids || []);
@@ -204,6 +210,7 @@
           unsubPosts();
           unsubCaptions();
           unsubFollows();
+          unsubUnfollows();
           unsubClicked();
           unsubStats();
           unsubRefs();
@@ -477,7 +484,32 @@
 
         await db.collection('unfollowList').doc(String(newItem.id)).set(newItem);
         setUnfollowUsernameInput('');
-        alert('언팔 관리 목록에 등록되었습니다!');
+      };
+
+      const handleDeleteUnfollow = async (id) => {
+        if (confirm('삭제하시겠습니까?')) {
+          await db.collection('unfollowList').doc(String(id)).delete();
+        }
+      };
+
+      const handleDeleteUnfollowDateGroup = async (targetDate, itemsInGroup) => {
+        if (confirm(`[${targetDate}] 날짜의 계정 ${itemsInGroup.length}개를 모두 삭제하시겠습니까?`)) {
+          for (const item of itemsInGroup) {
+            await db.collection('unfollowList').doc(String(item.id)).delete();
+          }
+        }
+      };
+
+      const handleEditUnfollowDate = async (item) => {
+        const newDate = prompt('수정할 날짜를 입력하세요 (YYYY-MM-DD):', item.date);
+        if (newDate) {
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(newDate.trim())) {
+            alert('날짜 형식이 올바르지 않습니다. (예: 2026-03-01)');
+            return;
+          }
+          await db.collection('unfollowList').doc(String(item.id)).update({ date: newDate.trim() });
+        }
       };
 
       const handleDeleteFollow = async (id) => {
@@ -532,15 +564,15 @@
         return Math.floor(diffTime / (1000 * 60 * 60 * 24));
       };
 
-      const getGroupedFollowData = () => {
-        const groups = followList.reduce((acc, item) => {
+      const groupByDate = (list, order) => {
+        const groups = list.reduce((acc, item) => {
           if (!acc[item.date]) acc[item.date] = [];
           acc[item.date].push(item);
           return acc;
         }, {});
 
         const sortedDates = Object.keys(groups).sort((a, b) => {
-          if (sortOrder === 'newest') return new Date(b) - new Date(a);
+          if (order === 'newest') return new Date(b) - new Date(a);
           return new Date(a) - new Date(b);
         });
 
@@ -550,8 +582,11 @@
         }));
       };
 
+      const getGroupedFollowData = () => groupByDate(followList, sortOrder);
+
       const dueFollowList = followList.filter(item => getDaysDiff(item.date) >= 7);
       const groupedFollowData = getGroupedFollowData();
+      const groupedUnfollowData = groupByDate(unfollowList, sortOrder);
 
       // 초안 에디터 핸들러
       const handleChange = (key, value) => {
@@ -762,11 +797,65 @@
 
       return (
         <div class="max-w-3xl mx-auto space-y-4 pb-12">
-          <div class="text-center pt-1 pb-1">
-            <h1 class="text-[26px] sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
-              🧚‍ 인플루언서 콘텐츠 초안 매니저
-            </h1>
-            <p class="text-[11px] text-slate-400 font-semibold mt-1 tracking-wide">DRAFT · CAPTION · FOLLOW · REFERENCE</p>
+          {/* 상단 고정 영역: 타이틀 + 메인 탭 + (팔로우 탭일 때) 서브탭 */}
+          <div class="sticky top-0 z-30 bg-white/95 backdrop-blur -mx-3 sm:-mx-6 px-3 sm:px-6 pt-3 sm:pt-6 pb-2 space-y-3 border-b border-slate-100/80 shadow-sm">
+            <div class="text-center pt-1 pb-1">
+              <h1 class="text-[26px] sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
+                🧚‍ 인플루언서 콘텐츠 초안 매니저
+              </h1>
+              <p class="text-[11px] text-slate-400 font-semibold mt-1 tracking-wide">DRAFT · CAPTION · FOLLOW · REFERENCE</p>
+            </div>
+
+            {/* 탭 네비게이션 (5개 탭) */}
+            <div class="flex gap-1 bg-white/80 backdrop-blur border border-slate-200/70 p-1.5 rounded-2xl text-xs sm:text-sm overflow-x-auto shadow-sm">
+              <button
+                onClick={() => setActiveTab('editor')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'editor' ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                ✍️ 초안 작성
+              </button>
+              <button
+                onClick={() => setActiveTab('list')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'list' ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                📂 저장 목록 ({savedPosts.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('caption')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'caption' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                ✍️ 인스타 캡션 ({captionList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('follow')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'follow' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                👥 팔로우 ({followList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('reference')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'reference' ? 'bg-pink-600 text-white shadow-md shadow-pink-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                📸 레퍼런스 ({references.length})
+              </button>
+            </div>
+
+            {activeTab === 'follow' && (
+              <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  onClick={() => setFollowSubTab('follow')}
+                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'follow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  📋 팔로우 관리
+                </button>
+                <button
+                  onClick={() => setFollowSubTab('unfollow')}
+                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'unfollow' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  🚫 언팔 관리
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 기존 데이터 백업 이관 안내 배너 */}
@@ -783,40 +872,6 @@
               </button>
             </div>
           )}
-
-          {/* 탭 네비게이션 (5개 탭) */}
-          <div class="flex gap-1 bg-white/80 backdrop-blur border border-slate-200/70 p-1.5 rounded-2xl text-xs sm:text-sm overflow-x-auto shadow-sm sticky top-2 z-10">
-            <button
-              onClick={() => setActiveTab('editor')}
-              class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'editor' ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              ✍️ 초안 작성
-            </button>
-            <button
-              onClick={() => setActiveTab('list')}
-              class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'list' ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              📂 저장 목록 ({savedPosts.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('caption')}
-              class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'caption' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              ✍️ 인스타 캡션 ({captionList.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('follow')}
-              class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'follow' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              👥 팔로우 ({followList.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('reference')}
-              class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'reference' ? 'bg-pink-600 text-white shadow-md shadow-pink-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
-              📸 레퍼런스 ({references.length})
-            </button>
-          </div>
 
           {/* TAB 1: 초안 작성 */}
           {activeTab === 'editor' && (
@@ -1252,23 +1307,8 @@
           {/* TAB 4: 👥 팔로우 / 언팔 관리자 */}
           {activeTab === 'follow' && (
             <div class="space-y-4">
-              {/* 서브탭: 팔로우 관리 / 언팔 관리 */}
-              <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
-                <button
-                  onClick={() => setFollowSubTab('follow')}
-                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'follow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  📋 팔로우 관리
-                </button>
-                <button
-                  onClick={() => setFollowSubTab('unfollow')}
-                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'unfollow' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  🚫 언팔 관리
-                </button>
-              </div>
-
               {followSubTab === 'unfollow' && (
+                <>
                 <form onSubmit={handleAddUnfollow} class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3.5">
                   <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">➕ 언팔 대상 계정 등록</div>
                   <input
@@ -1295,6 +1335,66 @@
                     </button>
                   </div>
                 </form>
+
+                <div class="text-[13px] font-bold text-slate-700">📋 언팔 관리 목록 ({unfollowList.length})</div>
+
+                {groupedUnfollowData.length === 0 ? (
+                  <div class="bg-white p-10 text-center text-slate-400 text-sm rounded-2xl border border-slate-100">
+                    등록된 언팔 관리 계정이 없습니다. 🧚‍
+                  </div>
+                ) : (
+                  <div class="space-y-4">
+                    {groupedUnfollowData.map(group => (
+                      <div key={group.date} class="space-y-2">
+                        <div class="flex justify-between items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200 text-gray-700">
+                          <span>📅 {group.date} ({group.items.length}개)</span>
+                          <button
+                            onClick={() => handleDeleteUnfollowDateGroup(group.date, group.items)}
+                            class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold rounded-lg transition"
+                          >
+                            이 날짜 전체 삭제
+                          </button>
+                        </div>
+                        <div class="space-y-2">
+                          {group.items.map(item => (
+                            <div key={item.id} class="p-3 rounded-lg bg-white border border-gray-200 space-y-2">
+                              <div class="flex justify-between items-center">
+                                <span class="font-bold text-sm text-rose-600">@{item.username}</span>
+                              </div>
+                              <div class="flex flex-wrap gap-1.5 justify-end">
+                                <button
+                                  onClick={() => copyTextToClipboard(item.username)}
+                                  class="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded hover:bg-gray-200 transition"
+                                >
+                                  계정 복사
+                                </button>
+                                <button
+                                  onClick={() => copyTextToClipboard(item.url)}
+                                  class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
+                                >
+                                  링크 복사
+                                </button>
+                                <button
+                                  onClick={() => handleEditUnfollowDate(item)}
+                                  class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
+                                >
+                                  날짜 수정
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUnfollow(item.id)}
+                                  class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
               )}
 
               {followSubTab === 'follow' && (
