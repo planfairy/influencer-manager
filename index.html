@@ -120,6 +120,9 @@
       const [followUsernameInput, setFollowUsernameInput] = useState('');
       const [followDateInput, setFollowDateInput] = useState(getTodayString());
       const [sortOrder, setSortOrder] = useState('oldest');
+      const [followSubTab, setFollowSubTab] = useState('follow');
+      const [unfollowUsernameInput, setUnfollowUsernameInput] = useState('');
+      const [unfollowDateInput, setUnfollowDateInput] = useState(getTodayString());
       const [clickedIds, setClickedIds] = useState([]);
 
       // 내 계정 수치
@@ -446,6 +449,35 @@
 
         await db.collection('followList').doc(String(newItem.id)).set(newItem);
         setFollowUsernameInput('');
+      };
+
+      const handleAddUnfollow = async (e) => {
+        if (e) e.preventDefault();
+
+        const trimmedUser = unfollowUsernameInput.trim().replace('@', '');
+        const trimmedDate = unfollowDateInput.trim();
+
+        if (!trimmedUser) {
+          alert('계정명을 입력해 주세요.');
+          return;
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(trimmedDate)) {
+          alert('날짜 형식을 YYYY-MM-DD에 맞춰 입력해 주세요. (예: 2026-03-01)');
+          return;
+        }
+
+        const newItem = {
+          id: Date.now().toString(),
+          username: trimmedUser,
+          url: `https://www.instagram.com/${trimmedUser}/`,
+          date: trimmedDate
+        };
+
+        await db.collection('unfollowList').doc(String(newItem.id)).set(newItem);
+        setUnfollowUsernameInput('');
+        alert('언팔 관리 목록에 등록되었습니다!');
       };
 
       const handleDeleteFollow = async (id) => {
@@ -1220,6 +1252,53 @@
           {/* TAB 4: 👥 팔로우 / 언팔 관리자 */}
           {activeTab === 'follow' && (
             <div class="space-y-4">
+              {/* 서브탭: 팔로우 관리 / 언팔 관리 */}
+              <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  onClick={() => setFollowSubTab('follow')}
+                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'follow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  📋 팔로우 관리
+                </button>
+                <button
+                  onClick={() => setFollowSubTab('unfollow')}
+                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'unfollow' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  🚫 언팔 관리
+                </button>
+              </div>
+
+              {followSubTab === 'unfollow' && (
+                <form onSubmit={handleAddUnfollow} class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3.5">
+                  <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">➕ 언팔 대상 계정 등록</div>
+                  <input
+                    type="text"
+                    placeholder="언팔 관리할 계정명 입력 (예: instagram)"
+                    value={unfollowUsernameInput}
+                    onChange={e => setUnfollowUsernameInput(e.target.value)}
+                    class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100 outline-none transition-all placeholder:text-slate-400"
+                  />
+                  <div class="flex gap-2 items-center">
+                    <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">등록일 지정:</span>
+                    <input
+                      type="text"
+                      placeholder="YYYY-MM-DD"
+                      value={unfollowDateInput}
+                      onChange={e => setUnfollowDateInput(e.target.value)}
+                      class="flex-1 border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100 outline-none transition-all"
+                    />
+                    <button
+                      type="submit"
+                      class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-xl transition shadow-md shadow-rose-500/25"
+                    >
+                      등록
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {followSubTab === 'follow' && (
+              <>
               {/* 오늘의 추천 댓글 박스 */}
               <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-5 rounded-2xl shadow-sm border border-purple-200/70 space-y-2">
                 <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
@@ -1472,6 +1551,8 @@
                     );
                   })}
                 </div>
+              )}
+              </>
               )}
             </div>
           )}
