@@ -460,6 +460,13 @@
         processIgFollowingFiles(e.dataTransfer.files);
       };
 
+      const handleRemoveNotFollowingBack = (username) => {
+        if (!igFollowing) return;
+        const updatedFollowing = { ...igFollowing, following: igFollowing.following.filter(u => u !== username) };
+        setIgFollowing(updatedFollowing);
+        saveIgTrackerData(igSnapshots, igUnfollowLog, updatedFollowing);
+      };
+
       const handleDeleteIgSnapshot = (date) => {
         if (confirm(`[${date}] 스냅샷을 삭제하시겠습니까? (언팔로우 감지 기록에는 영향 없음)`)) {
           const updated = igSnapshots.filter(s => s.date !== date);
@@ -2054,7 +2061,7 @@
                 ) : (
                   <div class="space-y-2">
                     <div class="text-[11px] text-slate-400">
-                      총 {notFollowingBackList.length}명이 나를 맞팔하지 않고 있어요 (팔로워 기준일: {latestFollowersSnapshot.date})
+                      총 {notFollowingBackList.length}명이 나를 맞팔하지 않고 있어요 (팔로워 기준일: {latestFollowersSnapshot.date}) · 팔로우 취소했으면 삭제로 체크하세요
                     </div>
                     <div class="max-h-72 overflow-y-auto space-y-1.5 pr-1">
                       {notFollowingBackList.map(username => (
@@ -2067,6 +2074,12 @@
                           >
                             @{username}
                           </a>
+                          <button
+                            onClick={() => handleRemoveNotFollowingBack(username)}
+                            class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition whitespace-nowrap"
+                          >
+                            삭제
+                          </button>
                         </div>
                       ))}
                     </div>
