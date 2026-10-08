@@ -257,10 +257,14 @@
         }
         const usernames = list.map(item => {
           const entry = item?.string_list_data?.[0];
-          if (!entry) return null;
-          if (entry.value) return entry.value;
-          if (entry.href) {
-            const match = entry.href.match(/instagram\.com\/([^/?]+)/);
+          // 1순위: string_list_data의 value (followers_1.json 등에서 보통 사용자명이 여기 있음)
+          if (entry?.value) return entry.value;
+          // 2순위: 항목 자체의 title (following.json은 value가 없고 title에 사용자명이 들어있음)
+          if (item?.title) return item.title;
+          // 3순위: href에서 추출. "instagram.com/_u/계정명" 형태(following.json)와
+          // "instagram.com/계정명" 형태(followers_1.json)를 모두 지원
+          if (entry?.href) {
+            const match = entry.href.match(/instagram\.com\/(?:_u\/)?([^/?]+)/);
             return match ? match[1] : null;
           }
           return null;
