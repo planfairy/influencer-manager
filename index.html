@@ -129,6 +129,7 @@
       // 🔍 인스타 언팔로우 추적 (로컬 전용, Firebase 미사용)
       const [igSnapshots, setIgSnapshots] = useState([]);
       const [igUnfollowLog, setIgUnfollowLog] = useState([]);
+      const [igFollowing, setIgFollowing] = useState(null);
 
       // 내 계정 수치
       const [myUsername, setMyUsername] = useState('');
@@ -231,15 +232,16 @@
             const parsed = JSON.parse(raw);
             setIgSnapshots(parsed.snapshots || []);
             setIgUnfollowLog(parsed.unfollowLog || []);
+            setIgFollowing(parsed.following || null);
           }
         } catch (err) {
           console.error('언팔로우 추적 로컬 데이터 로드 실패:', err);
         }
       }, []);
 
-      const saveIgTrackerData = (snapshots, log) => {
+      const saveIgTrackerData = (snapshots, log, following) => {
         try {
-          localStorage.setItem(IG_TRACKER_STORAGE_KEY, JSON.stringify({ snapshots, unfollowLog: log }));
+          localStorage.setItem(IG_TRACKER_STORAGE_KEY, JSON.stringify({ snapshots, unfollowLog: log, following }));
         } catch (err) {
           console.error('언팔로우 추적 로컬 저장 실패:', err);
         }
@@ -299,7 +301,7 @@
 
         setIgSnapshots(updatedSnapshots);
         setIgUnfollowLog(updatedLog);
-        saveIgTrackerData(updatedSnapshots, updatedLog);
+        saveIgTrackerData(updatedSnapshots, updatedLog, igFollowing);
 
         if (!baseline) {
           alert(`첫 팔로워 목록이 저장되었습니다! (${usernames.length}명)\n다음에 새 파일을 업로드하면 그때부터 언팔로우 감지가 시작됩니다.`);
@@ -381,24 +383,98 @@
         processIgFiles(e.dataTransfer.files);
       };
 
+      // 👥 맞팔 확인: 내가 팔로우하는데 나를 팔로우하지 않는 계정 찾기 (following.json 업로드)
+      const processIgFollowingFiles = (fileList) => {
+        const files = Array.from(fileList || []).filter(f => (f.name || '').toLowerCase().endsWith('.json'));
+        if (files.length === 0) {
+          alert('JSON 파일만 업로드할 수 있습니다.');
+          return;
+        }
+
+        const followingFiles = files.filter(f => /^following(_\d+)?\.json$/i.test(f.name));
+        const skipped = files.filter(f => !/^following(_\d+)?\.json$/i.test(f.name));
+
+        if (followingFiles.length === 0) {
+          alert('following.json 파일만 업로드할 수 있습니다.');
+          return;
+        }
+
+        if (skipped.length > 0) {
+          alert(`다음 파일은 팔로잉 목록 파일이 아니라서 제외했습니다:\n${skipped.map(f => f.name).join(', ')}`);
+        }
+
+        Promise.all(followingFiles.map(readFileAsText)).then(contents => {
+          let allUsernames = [];
+          let hadParseError = false;
+
+          contents.forEach(content => {
+            try {
+              const parsed = JSON.parse(content);
+              allUsernames = allUsernames.concat(extractInstagramUsernames(parsed));
+            } catch (err) {
+              hadParseError = true;
+            }
+          });
+
+          if (hadParseError) {
+            alert('일부 파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 파일인지 확인해 주세요.');
+          }
+
+          const usernames = [...new Set(allUsernames)];
+          if (usernames.length === 0) {
+            alert('팔로잉 목록을 찾을 수 없습니다. following.json 파일이 맞는지 확인해 주세요.');
+            return;
+          }
+
+          const updatedFollowing = { date: getTodayString(), following: usernames };
+          setIgFollowing(updatedFollowing);
+          saveIgTrackerData(igSnapshots, igUnfollowLog, updatedFollowing);
+          alert(`팔로잉 목록이 저장되었습니다! (${usernames.length}명)`);
+        });
+      };
+
+      const handleIgFollowingFileUpload = (e) => {
+        processIgFollowingFiles(e.target.files);
+        e.target.value = '';
+      };
+
+      const [isIgFollowingDragging, setIsIgFollowingDragging] = useState(false);
+
+      const handleIgFollowingDragOver = (e) => {
+        e.preventDefault();
+        setIsIgFollowingDragging(true);
+      };
+
+      const handleIgFollowingDragLeave = (e) => {
+        e.preventDefault();
+        setIsIgFollowingDragging(false);
+      };
+
+      const handleIgFollowingDrop = (e) => {
+        e.preventDefault();
+        setIsIgFollowingDragging(false);
+        processIgFollowingFiles(e.dataTransfer.files);
+      };
+
       const handleDeleteIgSnapshot = (date) => {
         if (confirm(`[${date}] 스냅샷을 삭제하시겠습니까? (언팔로우 감지 기록에는 영향 없음)`)) {
           const updated = igSnapshots.filter(s => s.date !== date);
           setIgSnapshots(updated);
-          saveIgTrackerData(updated, igUnfollowLog);
+          saveIgTrackerData(updated, igUnfollowLog, igFollowing);
         }
       };
 
       const handleDeleteUnfollowLogItem = (index) => {
         const updated = igUnfollowLog.filter((_, i) => i !== index);
         setIgUnfollowLog(updated);
-        saveIgTrackerData(igSnapshots, updated);
+        saveIgTrackerData(igSnapshots, updated, igFollowing);
       };
 
       const handleResetIgTracker = () => {
         if (confirm('언팔로우 추적 데이터를 전부 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
           setIgSnapshots([]);
           setIgUnfollowLog([]);
+          setIgFollowing(null);
           localStorage.removeItem(IG_TRACKER_STORAGE_KEY);
         }
       };
@@ -773,6 +849,14 @@
       const dueFollowList = followList.filter(item => getDaysDiff(item.date) >= 7);
       const groupedFollowData = getGroupedFollowData();
       const groupedUnfollowData = groupByDate(unfollowList, sortOrder);
+
+      // 👥 맞팔 확인: 가장 최근 팔로워 스냅샷 기준으로, 내가 팔로우하지만 나를 팔로우하지 않는 계정 계산
+      const latestFollowersSnapshot = igSnapshots.length > 0 ? igSnapshots[igSnapshots.length - 1] : null;
+      const latestFollowersSet = latestFollowersSnapshot ? new Set(latestFollowersSnapshot.followers) : null;
+      const notFollowingBackList = (igFollowing && latestFollowersSet)
+        ? igFollowing.following.filter(u => !latestFollowersSet.has(u))
+        : [];
+
 
       // 초안 에디터 핸들러
       const handleChange = (key, value) => {
@@ -1854,9 +1938,10 @@
             <div class="space-y-4">
               <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-xs text-indigo-700 space-y-1">
                 <div class="font-bold">📥 사용 방법</div>
-                <div>1. 인스타그램 앱 → 설정 → 내 활동 → 정보 다운로드에서 "팔로워 및 팔로잉"을 JSON 형식으로 다운로드하세요.</div>
+                <div>1. 인스타그램 앱 → 설정 → 계정 센터 → 내 정보 및 권한 → 내 정보 내보내기 → 기기로 내보내기 → 정보 맞춤 설정(팔로워 및 팔로잉) → 형식 JSON으로 다운로드하세요.</div>
                 <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요. followers_2.json처럼 여러 개로 나뉘어 있다면 한꺼번에 선택하거나 드래그해서 올려도 자동으로 합쳐서 분석해요.</div>
                 <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
+                <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
                 <div class="text-indigo-400 pt-1">⚠️ 모든 데이터는 이 기기(브라우저)에만 저장되고 외부로 전송되지 않습니다.</div>
               </div>
 
@@ -1924,6 +2009,66 @@
                   ))}
                 </div>
               )}
+
+              {/* 👥 맞팔 확인: 내가 팔로우하는데 나를 팔로우하지 않는 계정 */}
+              <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
+                <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">
+                  👥 맞팔 확인 (내가 팔로우하지만 나를 팔로우하지 않는 계정)
+                </div>
+
+                <label
+                  onDragOver={handleIgFollowingDragOver}
+                  onDragLeave={handleIgFollowingDragLeave}
+                  onDrop={handleIgFollowingDrop}
+                  class={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition ${isIgFollowingDragging ? 'border-rose-400 bg-rose-100/60' : 'border-rose-200 hover:bg-rose-50/50'}`}
+                >
+                  <span class="text-2xl">📄</span>
+                  <span class="text-xs font-bold text-rose-600">
+                    {isIgFollowingDragging ? '여기에 놓으세요! 🎯' : 'following.json 파일 선택 또는 드래그 앤 드롭'}
+                  </span>
+                  <input type="file" accept=".json,application/json" multiple onChange={handleIgFollowingFileUpload} class="hidden" />
+                </label>
+
+                {igFollowing && (
+                  <div class="text-[11px] text-slate-400 text-center">
+                    최근 저장된 팔로잉 목록: {igFollowing.date} ({igFollowing.following.length}명)
+                  </div>
+                )}
+
+                {!latestFollowersSnapshot ? (
+                  <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    ⚠️ 먼저 위에서 팔로워 목록(followers_1.json)을 업로드해야 비교할 수 있어요.
+                  </div>
+                ) : !igFollowing ? (
+                  <div class="text-xs text-slate-400 text-center py-4">
+                    팔로잉 목록(following.json)을 업로드하면 맞팔하지 않는 계정을 바로 보여드려요.
+                  </div>
+                ) : notFollowingBackList.length === 0 ? (
+                  <div class="p-6 text-center text-slate-400 text-sm rounded-xl border border-slate-100">
+                    맞팔하지 않는 계정이 없습니다! 모두 맞팔 중이에요 🎉
+                  </div>
+                ) : (
+                  <div class="space-y-2">
+                    <div class="text-[11px] text-slate-400">
+                      총 {notFollowingBackList.length}명이 나를 맞팔하지 않고 있어요 (팔로워 기준일: {latestFollowersSnapshot.date})
+                    </div>
+                    <div class="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                      {notFollowingBackList.map(username => (
+                        <div key={username} class="flex justify-between items-center text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <a
+                            href={`https://www.instagram.com/${username}/`}
+                            target="_blank"
+                            rel="noreferrer"
+                            class="font-semibold text-indigo-600 hover:underline"
+                          >
+                            @{username}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {igSnapshots.length > 0 && (
                 <details class="bg-white p-4 rounded-2xl border border-slate-100">
