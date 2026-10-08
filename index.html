@@ -126,6 +126,10 @@
       const [unfollowList, setUnfollowList] = useState([]);
       const [clickedIds, setClickedIds] = useState([]);
 
+      // 🔍 인스타 언팔로우 추적 (로컬 전용, Firebase 미사용)
+      const [igSnapshots, setIgSnapshots] = useState([]);
+      const [igUnfollowLog, setIgUnfollowLog] = useState([]);
+
       // 내 계정 수치
       const [myUsername, setMyUsername] = useState('');
       const [followersCount, setFollowersCount] = useState('');
@@ -216,6 +220,132 @@
           unsubRefs();
         };
       }, []);
+
+      // 🔍 인스타 언팔로우 추적: 완전히 로컬(브라우저)에만 저장, Firebase/외부 전송 없음
+      const IG_TRACKER_STORAGE_KEY = 'IG_UNFOLLOW_TRACKER_DATA';
+
+      useEffect(() => {
+        try {
+          const raw = localStorage.getItem(IG_TRACKER_STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            setIgSnapshots(parsed.snapshots || []);
+            setIgUnfollowLog(parsed.unfollowLog || []);
+          }
+        } catch (err) {
+          console.error('언팔로우 추적 로컬 데이터 로드 실패:', err);
+        }
+      }, []);
+
+      const saveIgTrackerData = (snapshots, log) => {
+        try {
+          localStorage.setItem(IG_TRACKER_STORAGE_KEY, JSON.stringify({ snapshots, unfollowLog: log }));
+        } catch (err) {
+          console.error('언팔로우 추적 로컬 저장 실패:', err);
+        }
+      };
+
+      const extractInstagramUsernames = (parsed) => {
+        let list = [];
+        if (Array.isArray(parsed)) {
+          list = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          const arrKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+          if (arrKey) list = parsed[arrKey];
+        }
+        const usernames = list.map(item => {
+          const entry = item?.string_list_data?.[0];
+          if (!entry) return null;
+          if (entry.value) return entry.value;
+          if (entry.href) {
+            const match = entry.href.match(/instagram\.com\/([^/?]+)/);
+            return match ? match[1] : null;
+          }
+          return null;
+        }).filter(Boolean);
+        return [...new Set(usernames)];
+      };
+
+      const handleIgFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          let parsed;
+          try {
+            parsed = JSON.parse(ev.target.result);
+          } catch (err) {
+            alert('JSON 파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 파일인지 확인해 주세요.');
+            return;
+          }
+
+          const usernames = extractInstagramUsernames(parsed);
+          if (usernames.length === 0) {
+            alert('팔로워 목록을 찾을 수 없습니다. 인스타그램 공식 데이터 다운로드의 followers_1.json 파일이 맞는지 확인해 주세요.');
+            return;
+          }
+
+          const today = getTodayString();
+          const priorSnapshots = igSnapshots.filter(s => s.date !== today);
+          const baseline = priorSnapshots.reduce((latest, s) => (!latest || s.date > latest.date) ? s : latest, null);
+
+          let newlyUnfollowed = [];
+          if (baseline) {
+            const newSet = new Set(usernames);
+            newlyUnfollowed = baseline.followers.filter(u => !newSet.has(u));
+          }
+
+          const updatedSnapshots = [...priorSnapshots, { date: today, followers: usernames }]
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+          let updatedLog = igUnfollowLog;
+          if (newlyUnfollowed.length > 0) {
+            const additions = newlyUnfollowed.map(u => ({
+              username: u,
+              detectedDate: today,
+              lastSeenDate: baseline.date
+            }));
+            updatedLog = [...additions, ...igUnfollowLog];
+          }
+
+          setIgSnapshots(updatedSnapshots);
+          setIgUnfollowLog(updatedLog);
+          saveIgTrackerData(updatedSnapshots, updatedLog);
+
+          if (!baseline) {
+            alert(`첫 팔로워 목록이 저장되었습니다! (${usernames.length}명)\n다음에 새 파일을 업로드하면 그때부터 언팔로우 감지가 시작됩니다.`);
+          } else if (newlyUnfollowed.length > 0) {
+            alert(`🚨 ${newlyUnfollowed.length}명이 회원님을 언팔로우했습니다! (비교 기준일: ${baseline.date})`);
+          } else {
+            alert('👍 이전 기록과 비교 결과, 언팔로우한 계정이 없습니다.');
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      const handleDeleteIgSnapshot = (date) => {
+        if (confirm(`[${date}] 스냅샷을 삭제하시겠습니까? (언팔로우 감지 기록에는 영향 없음)`)) {
+          const updated = igSnapshots.filter(s => s.date !== date);
+          setIgSnapshots(updated);
+          saveIgTrackerData(updated, igUnfollowLog);
+        }
+      };
+
+      const handleDeleteUnfollowLogItem = (index) => {
+        const updated = igUnfollowLog.filter((_, i) => i !== index);
+        setIgUnfollowLog(updated);
+        saveIgTrackerData(igSnapshots, updated);
+      };
+
+      const handleResetIgTracker = () => {
+        if (confirm('언팔로우 추적 데이터를 전부 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+          setIgSnapshots([]);
+          setIgUnfollowLog([]);
+          localStorage.removeItem(IG_TRACKER_STORAGE_KEY);
+        }
+      };
 
       const migrateLocalDataToCloud = async () => {
         if (!confirm('기존 노트북에 저장된 데이터를 구글 클라우드로 한 번에 옮기시겠습니까?')) return;
@@ -831,6 +961,12 @@
                 class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'follow' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
               >
                 👥 팔로우 ({followList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('igTrack')}
+                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'igTrack' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                🔍 언팔추적 ({igUnfollowLog.length})
               </button>
               <button
                 onClick={() => setActiveTab('reference')}
@@ -1653,6 +1789,96 @@
                 </div>
               )}
               </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: 🔍 인스타 언팔로우 추적 (로컬 전용) */}
+          {activeTab === 'igTrack' && (
+            <div class="space-y-4">
+              <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-xs text-indigo-700 space-y-1">
+                <div class="font-bold">📥 사용 방법</div>
+                <div>1. 인스타그램 앱 → 설정 → 내 활동 → 정보 다운로드에서 "팔로워 및 팔로잉"을 JSON 형식으로 다운로드하세요.</div>
+                <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요.</div>
+                <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
+                <div class="text-indigo-400 pt-1">⚠️ 모든 데이터는 이 기기(브라우저)에만 저장되고 외부로 전송되지 않습니다.</div>
+              </div>
+
+              <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
+                <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">📤 팔로워 목록 업로드 (JSON)</div>
+                <label class="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-indigo-200 rounded-xl py-6 cursor-pointer hover:bg-indigo-50/50 transition">
+                  <span class="text-2xl">📄</span>
+                  <span class="text-xs font-bold text-indigo-600">followers_1.json 파일 선택</span>
+                  <input type="file" accept=".json,application/json" onChange={handleIgFileUpload} class="hidden" />
+                </label>
+                {igSnapshots.length > 0 && (
+                  <div class="text-[11px] text-slate-400 text-center">
+                    최근 저장된 스냅샷: {igSnapshots[igSnapshots.length - 1].date} ({igSnapshots[igSnapshots.length - 1].followers.length}명)
+                  </div>
+                )}
+              </div>
+
+              <div class="flex justify-between items-center">
+                <div class="text-[13px] font-bold text-slate-700">🚨 언팔로우 감지 목록 ({igUnfollowLog.length})</div>
+                {igUnfollowLog.length > 0 && (
+                  <button
+                    onClick={handleResetIgTracker}
+                    class="text-[11px] text-slate-400 hover:text-rose-500 hover:underline transition"
+                  >
+                    전체 초기화
+                  </button>
+                )}
+              </div>
+
+              {igUnfollowLog.length === 0 ? (
+                <div class="bg-white p-10 text-center text-slate-400 text-sm rounded-2xl border border-slate-100">
+                  아직 감지된 언팔로우가 없습니다. 🧚‍
+                </div>
+              ) : (
+                <div class="space-y-2">
+                  {igUnfollowLog.map((item, idx) => (
+                    <div key={`${item.username}-${item.detectedDate}-${idx}`} class="p-3 rounded-lg bg-rose-50/40 border border-rose-200 flex justify-between items-center gap-2">
+                      <div>
+                        <a
+                          href={`https://www.instagram.com/${item.username}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                          class="font-bold text-sm text-rose-600 hover:underline"
+                        >
+                          @{item.username}
+                        </a>
+                        <div class="text-[11px] text-slate-400 mt-0.5">
+                          {item.detectedDate} 감지 · 마지막 확인일 {item.lastSeenDate}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteUnfollowLogItem(idx)}
+                        class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition whitespace-nowrap"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {igSnapshots.length > 0 && (
+                <details class="bg-white p-4 rounded-2xl border border-slate-100">
+                  <summary class="text-xs font-bold text-slate-600 cursor-pointer">📅 저장된 스냅샷 기록 ({igSnapshots.length}개)</summary>
+                  <div class="mt-3 space-y-1.5">
+                    {[...igSnapshots].reverse().map(snap => (
+                      <div key={snap.date} class="flex justify-between items-center text-xs bg-slate-50 p-2 rounded-lg">
+                        <span class="font-semibold text-slate-600">{snap.date} · {snap.followers.length}명</span>
+                        <button
+                          onClick={() => handleDeleteIgSnapshot(snap.date)}
+                          class="text-rose-500 hover:underline text-[11px] font-semibold"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           )}
