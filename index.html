@@ -126,7 +126,7 @@
       const [unfollowList, setUnfollowList] = useState([]);
       const [clickedIds, setClickedIds] = useState([]);
 
-      // 🔍 인스타 언팔로우 추적 (로컬 전용, Firebase 미사용)
+      // 🔍 인스타 언팔로우 추적 (Firebase Cloud Firestore에 저장, 기기/브라우저 간 동기화)
       const [igSnapshots, setIgSnapshots] = useState([]);
       const [igUnfollowLog, setIgUnfollowLog] = useState([]);
       const [igFollowing, setIgFollowing] = useState(null);
@@ -211,6 +211,21 @@
           setReferences(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
         });
 
+        // 7. 🔍 인스타 언팔로우 추적: 팔로워 스냅샷 (날짜별 문서)
+        const unsubIgSnapshots = db.collection('igSnapshots').orderBy('date', 'asc').onSnapshot(snapshot => {
+          setIgSnapshots(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        // 8. 🔍 인스타 언팔로우 추적: 언팔로우 감지 로그
+        const unsubIgUnfollowLog = db.collection('igUnfollowLog').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+          setIgUnfollowLog(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+        });
+
+        // 9. 🔍 인스타 맞팔 확인: 최근 업로드한 팔로잉 목록
+        const unsubIgFollowing = db.collection('igFollowing').doc('current').onSnapshot(doc => {
+          setIgFollowing(doc.exists ? doc.data() : null);
+        });
+
         return () => {
           unsubPosts();
           unsubCaptions();
@@ -219,33 +234,11 @@
           unsubClicked();
           unsubStats();
           unsubRefs();
+          unsubIgSnapshots();
+          unsubIgUnfollowLog();
+          unsubIgFollowing();
         };
       }, []);
-
-      // 🔍 인스타 언팔로우 추적: 완전히 로컬(브라우저)에만 저장, Firebase/외부 전송 없음
-      const IG_TRACKER_STORAGE_KEY = 'IG_UNFOLLOW_TRACKER_DATA';
-
-      useEffect(() => {
-        try {
-          const raw = localStorage.getItem(IG_TRACKER_STORAGE_KEY);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            setIgSnapshots(parsed.snapshots || []);
-            setIgUnfollowLog(parsed.unfollowLog || []);
-            setIgFollowing(parsed.following || null);
-          }
-        } catch (err) {
-          console.error('언팔로우 추적 로컬 데이터 로드 실패:', err);
-        }
-      }, []);
-
-      const saveIgTrackerData = (snapshots, log, following) => {
-        try {
-          localStorage.setItem(IG_TRACKER_STORAGE_KEY, JSON.stringify({ snapshots, unfollowLog: log, following }));
-        } catch (err) {
-          console.error('언팔로우 추적 로컬 저장 실패:', err);
-        }
-      };
 
       const extractInstagramUsernames = (parsed) => {
         let list = [];
@@ -279,7 +272,7 @@
         reader.readAsText(file);
       });
 
-      const finalizeIgSnapshot = (usernames) => {
+      const finalizeIgSnapshot = async (usernames) => {
         const today = getTodayString();
         const priorSnapshots = igSnapshots.filter(s => s.date !== today);
         const baseline = priorSnapshots.reduce((latest, s) => (!latest || s.date > latest.date) ? s : latest, null);
@@ -290,25 +283,20 @@
           newlyUnfollowed = baseline.followers.filter(u => !newSet.has(u));
         }
 
-        const updatedSnapshots = [...priorSnapshots, { date: today, followers: usernames }]
-          .sort((a, b) => a.date.localeCompare(b.date));
+        await db.collection('igSnapshots').doc(today).set({ date: today, followers: usernames });
 
-        let updatedLog = igUnfollowLog;
         if (newlyUnfollowed.length > 0) {
-          const additions = newlyUnfollowed.map(u => ({
+          const now = Date.now();
+          await Promise.all(newlyUnfollowed.map((u, i) => db.collection('igUnfollowLog').add({
             username: u,
             detectedDate: today,
-            lastSeenDate: baseline.date
-          }));
-          updatedLog = [...additions, ...igUnfollowLog];
+            lastSeenDate: baseline.date,
+            createdAt: now + i
+          })));
         }
 
-        setIgSnapshots(updatedSnapshots);
-        setIgUnfollowLog(updatedLog);
-        saveIgTrackerData(updatedSnapshots, updatedLog, igFollowing);
-
         if (!baseline) {
-          alert(`첫 팔로워 목록이 저장되었습니다! (${usernames.length}명)\n다음에 새 파일을 업로드하면 그때부터 언팔로우 감지가 시작됩니다.`);
+          alert(`첫 팔로워 목록이 클라우드에 저장되었습니다! (${usernames.length}명)\n다음에 새 파일을 업로드하면 그때부터 언팔로우 감지가 시작됩니다.`);
         } else if (newlyUnfollowed.length > 0) {
           alert(`🚨 ${newlyUnfollowed.length}명이 회원님을 언팔로우했습니다! (비교 기준일: ${baseline.date})`);
         } else {
@@ -407,7 +395,7 @@
           alert(`다음 파일은 팔로잉 목록 파일이 아니라서 제외했습니다:\n${skipped.map(f => f.name).join(', ')}`);
         }
 
-        Promise.all(followingFiles.map(readFileAsText)).then(contents => {
+        Promise.all(followingFiles.map(readFileAsText)).then(async (contents) => {
           let allUsernames = [];
           let hadParseError = false;
 
@@ -430,10 +418,8 @@
             return;
           }
 
-          const updatedFollowing = { date: getTodayString(), following: usernames };
-          setIgFollowing(updatedFollowing);
-          saveIgTrackerData(igSnapshots, igUnfollowLog, updatedFollowing);
-          alert(`팔로잉 목록이 저장되었습니다! (${usernames.length}명)`);
+          await db.collection('igFollowing').doc('current').set({ date: getTodayString(), following: usernames });
+          alert(`팔로잉 목록이 클라우드에 저장되었습니다! (${usernames.length}명)`);
         });
       };
 
@@ -460,33 +446,30 @@
         processIgFollowingFiles(e.dataTransfer.files);
       };
 
-      const handleRemoveNotFollowingBack = (username) => {
+      const handleRemoveNotFollowingBack = async (username) => {
         if (!igFollowing) return;
-        const updatedFollowing = { ...igFollowing, following: igFollowing.following.filter(u => u !== username) };
-        setIgFollowing(updatedFollowing);
-        saveIgTrackerData(igSnapshots, igUnfollowLog, updatedFollowing);
+        await db.collection('igFollowing').doc('current').update({
+          following: firebase.firestore.FieldValue.arrayRemove(username)
+        });
       };
 
-      const handleDeleteIgSnapshot = (date) => {
+      const handleDeleteIgSnapshot = async (date) => {
         if (confirm(`[${date}] 스냅샷을 삭제하시겠습니까? (언팔로우 감지 기록에는 영향 없음)`)) {
-          const updated = igSnapshots.filter(s => s.date !== date);
-          setIgSnapshots(updated);
-          saveIgTrackerData(updated, igUnfollowLog, igFollowing);
+          await db.collection('igSnapshots').doc(date).delete();
         }
       };
 
-      const handleDeleteUnfollowLogItem = (index) => {
-        const updated = igUnfollowLog.filter((_, i) => i !== index);
-        setIgUnfollowLog(updated);
-        saveIgTrackerData(igSnapshots, updated, igFollowing);
+      const handleDeleteUnfollowLogItem = async (docId) => {
+        await db.collection('igUnfollowLog').doc(docId).delete();
       };
 
-      const handleResetIgTracker = () => {
+      const handleResetIgTracker = async () => {
         if (confirm('언팔로우 추적 데이터를 전부 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-          setIgSnapshots([]);
-          setIgUnfollowLog([]);
-          setIgFollowing(null);
-          localStorage.removeItem(IG_TRACKER_STORAGE_KEY);
+          await Promise.all([
+            ...igSnapshots.map(s => db.collection('igSnapshots').doc(s.docId || s.date).delete()),
+            ...igUnfollowLog.map(item => db.collection('igUnfollowLog').doc(item.docId).delete()),
+            db.collection('igFollowing').doc('current').delete()
+          ]);
         }
       };
 
@@ -1953,7 +1936,7 @@
                 <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요. followers_2.json처럼 여러 개로 나뉘어 있다면 한꺼번에 선택하거나 드래그해서 올려도 자동으로 합쳐서 분석해요.</div>
                 <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
                 <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
-                <div class="text-indigo-400 pt-1">⚠️ 모든 데이터는 이 기기(브라우저)에만 저장되고 외부로 전송되지 않습니다.</div>
+                <div class="text-indigo-400 pt-1">☁️ 모든 데이터는 클라우드(Firebase)에 저장되어 어떤 기기/브라우저에서 열어도 동일하게 보여요.</div>
               </div>
 
               <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
@@ -2011,7 +1994,7 @@
                         </div>
                       </div>
                       <button
-                        onClick={() => handleDeleteUnfollowLogItem(idx)}
+                        onClick={() => handleDeleteUnfollowLogItem(item.docId)}
                         class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition whitespace-nowrap"
                       >
                         삭제
