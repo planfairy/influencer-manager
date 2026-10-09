@@ -255,24 +255,34 @@
           const arrKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
           if (arrKey) list = parsed[arrKey];
         }
+        // href/url 문자열에서 인스타그램 계정명만 뽑아내는 헬퍼
+        // "instagram.com/_u/계정명" 형태(following.json)와 "instagram.com/계정명" 형태(followers_1.json)를 모두 지원
+        const extractFromUrl = (url) => {
+          const match = typeof url === 'string' ? url.match(/instagram\.com\/(?:_u\/)?([^/?]+)/) : null;
+          return match ? match[1] : null;
+        };
+
         const usernames = list.map(item => {
+          let raw = null;
           // 0순위: 배열 항목이 그냥 문자열인 경우 (직접 관리하는 아이디 목록 등)
-          if (typeof item === 'string') return item.trim().replace('@', '');
-          const entry = item?.string_list_data?.[0];
-          // 1순위: string_list_data의 value (followers_1.json 등에서 보통 사용자명이 여기 있음)
-          if (entry?.value) return entry.value;
-          // 2순위: 항목 자체의 title (following.json은 value가 없고 title에 사용자명이 들어있음)
-          if (item?.title) return item.title;
-          // 2-1순위: username/id 필드로 직접 관리하는 목록
-          if (item?.username) return item.username;
-          if (item?.id && typeof item.id === 'string') return item.id;
-          // 3순위: href에서 추출. "instagram.com/_u/계정명" 형태(following.json)와
-          // "instagram.com/계정명" 형태(followers_1.json)를 모두 지원
-          if (entry?.href) {
-            const match = entry.href.match(/instagram\.com\/(?:_u\/)?([^/?]+)/);
-            return match ? match[1] : null;
+          if (typeof item === 'string') {
+            raw = item;
+          } else {
+            const entry = item?.string_list_data?.[0];
+            // 1순위: string_list_data의 value (followers_1.json 등에서 보통 사용자명이 여기 있음)
+            if (entry?.value) raw = entry.value;
+            // 2순위: 항목 자체의 title (following.json은 value가 없고 title에 사용자명이 들어있음)
+            else if (item?.title) raw = item.title;
+            // 2-1순위: username/id 필드로 직접 관리하는 목록
+            else if (item?.username) raw = item.username;
+            else if (item?.id && typeof item.id === 'string') raw = item.id;
+            // 3순위: href/url 필드에서 추출
+            else if (entry?.href) raw = extractFromUrl(entry.href);
+            else if (item?.url) raw = extractFromUrl(item.url);
+            else if (item?.href) raw = extractFromUrl(item.href);
           }
-          return null;
+          // "@계정명", "계정명/", 앞뒤 공백 등을 모두 제거해서 다른 파일에서 뽑은 계정명과 항상 똑같이 비교되게 정규화
+          return raw ? raw.trim().replace(/^@/, '').replace(/\/+$/, '') : null;
         }).filter(Boolean);
         return [...new Set(usernames)];
       };
@@ -489,7 +499,9 @@
             return;
           }
 
-          const existing = igExcludedAccounts?.usernames || [];
+          // 예전 버전에서 "@계정명" 형태로 저장된 값이 남아있을 수 있어 기존 목록도 함께 정규화
+          const existingRaw = igExcludedAccounts?.usernames || [];
+          const existing = existingRaw.map(u => u.trim().replace(/^@/, '').replace(/\/+$/, ''));
           const merged = [...new Set([...existing, ...newUsernames])];
           await db.collection('igExcludedAccounts').doc('current').set({ usernames: merged });
           alert(`아이디 변경/비활성 목록이 저장되었습니다! (신규 ${newUsernames.filter(u => !existing.includes(u)).length}명 추가, 전체 ${merged.length}명)`);
