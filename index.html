@@ -130,6 +130,7 @@
       const [igSnapshots, setIgSnapshots] = useState([]);
       const [igUnfollowLog, setIgUnfollowLog] = useState([]);
       const [igFollowing, setIgFollowing] = useState(null);
+      const [igExcludedAccounts, setIgExcludedAccounts] = useState(null);
 
       // 내 계정 수치
       const [myUsername, setMyUsername] = useState('');
@@ -226,6 +227,11 @@
           setIgFollowing(doc.exists ? doc.data() : null);
         });
 
+        // 10. 🔍 아이디 변경/비활성 추정 계정 목록 (맞팔 확인에서 제외)
+        const unsubIgExcluded = db.collection('igExcludedAccounts').doc('current').onSnapshot(doc => {
+          setIgExcludedAccounts(doc.exists ? doc.data() : null);
+        });
+
         return () => {
           unsubPosts();
           unsubCaptions();
@@ -237,6 +243,7 @@
           unsubIgSnapshots();
           unsubIgUnfollowLog();
           unsubIgFollowing();
+          unsubIgExcluded();
         };
       }, []);
 
@@ -249,11 +256,16 @@
           if (arrKey) list = parsed[arrKey];
         }
         const usernames = list.map(item => {
+          // 0순위: 배열 항목이 그냥 문자열인 경우 (직접 관리하는 아이디 목록 등)
+          if (typeof item === 'string') return item.trim().replace('@', '');
           const entry = item?.string_list_data?.[0];
           // 1순위: string_list_data의 value (followers_1.json 등에서 보통 사용자명이 여기 있음)
           if (entry?.value) return entry.value;
           // 2순위: 항목 자체의 title (following.json은 value가 없고 title에 사용자명이 들어있음)
           if (item?.title) return item.title;
+          // 2-1순위: username/id 필드로 직접 관리하는 목록
+          if (item?.username) return item.username;
+          if (item?.id && typeof item.id === 'string') return item.id;
           // 3순위: href에서 추출. "instagram.com/_u/계정명" 형태(following.json)와
           // "instagram.com/계정명" 형태(followers_1.json)를 모두 지원
           if (entry?.href) {
@@ -444,6 +456,73 @@
         e.preventDefault();
         setIsIgFollowingDragging(false);
         processIgFollowingFiles(e.dataTransfer.files);
+      };
+
+      // 🚫 아이디 변경/비활성 추정 계정 목록 업로드 (직접 관리하는 JSON 목록, 중복 제거 후 누적 저장)
+      const processIgExcludedFiles = (fileList) => {
+        const files = Array.from(fileList || []).filter(f => (f.name || '').toLowerCase().endsWith('.json'));
+        if (files.length === 0) {
+          alert('JSON 파일만 업로드할 수 있습니다.');
+          return;
+        }
+
+        Promise.all(files.map(readFileAsText)).then(async (contents) => {
+          let allUsernames = [];
+          let hadParseError = false;
+
+          contents.forEach(content => {
+            try {
+              const parsed = JSON.parse(content);
+              allUsernames = allUsernames.concat(extractInstagramUsernames(parsed));
+            } catch (err) {
+              hadParseError = true;
+            }
+          });
+
+          if (hadParseError) {
+            alert('일부 파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 파일인지 확인해 주세요.');
+          }
+
+          const newUsernames = [...new Set(allUsernames)];
+          if (newUsernames.length === 0) {
+            alert('아이디 목록을 찾을 수 없습니다. 파일 형식을 확인해 주세요.');
+            return;
+          }
+
+          const existing = igExcludedAccounts?.usernames || [];
+          const merged = [...new Set([...existing, ...newUsernames])];
+          await db.collection('igExcludedAccounts').doc('current').set({ usernames: merged });
+          alert(`아이디 변경/비활성 목록이 저장되었습니다! (신규 ${newUsernames.filter(u => !existing.includes(u)).length}명 추가, 전체 ${merged.length}명)`);
+        });
+      };
+
+      const handleIgExcludedFileUpload = (e) => {
+        processIgExcludedFiles(e.target.files);
+        e.target.value = '';
+      };
+
+      const [isIgExcludedDragging, setIsIgExcludedDragging] = useState(false);
+
+      const handleIgExcludedDragOver = (e) => {
+        e.preventDefault();
+        setIsIgExcludedDragging(true);
+      };
+
+      const handleIgExcludedDragLeave = (e) => {
+        e.preventDefault();
+        setIsIgExcludedDragging(false);
+      };
+
+      const handleIgExcludedDrop = (e) => {
+        e.preventDefault();
+        setIsIgExcludedDragging(false);
+        processIgExcludedFiles(e.dataTransfer.files);
+      };
+
+      const handleRemoveExcludedAccount = async (username) => {
+        await db.collection('igExcludedAccounts').doc('current').update({
+          usernames: firebase.firestore.FieldValue.arrayRemove(username)
+        });
       };
 
       const handleRemoveNotFollowingBack = async (username) => {
@@ -847,9 +926,13 @@
       // 👥 맞팔 확인: 가장 최근 팔로워 스냅샷 기준으로, 내가 팔로우하지만 나를 팔로우하지 않는 계정 계산
       const latestFollowersSnapshot = igSnapshots.length > 0 ? igSnapshots[igSnapshots.length - 1] : null;
       const latestFollowersSet = latestFollowersSnapshot ? new Set(latestFollowersSnapshot.followers) : null;
-      const notFollowingBackList = (igFollowing && latestFollowersSet)
+      const igExcludedSet = igExcludedAccounts ? new Set(igExcludedAccounts.usernames) : new Set();
+      const notFollowingBackRaw = (igFollowing && latestFollowersSet)
         ? igFollowing.following.filter(u => !latestFollowersSet.has(u))
         : [];
+      // 아이디 변경/비활성으로 이미 확인된 계정은 맞팔 확인 목록에서 제외하고 별도 목록으로 분리
+      const notFollowingBackList = notFollowingBackRaw.filter(u => !igExcludedSet.has(u));
+      const suspectedChangedOrInactiveList = notFollowingBackRaw.filter(u => igExcludedSet.has(u));
 
 
       // 초안 에디터 핸들러
@@ -1936,6 +2019,7 @@
                 <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요. followers_2.json처럼 여러 개로 나뉘어 있다면 한꺼번에 선택하거나 드래그해서 올려도 자동으로 합쳐서 분석해요.</div>
                 <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
                 <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
+                <div>5. 아이디가 바뀌었거나 비활성화된 것으로 직접 확인한 계정은 맨 아래 "아이디 변경/비활성 계정 목록 관리"에 JSON으로 올려두면, 그 다음부터는 맞팔 확인 결과에서 자동으로 빠지고 별도 목록으로 모아서 보여드려요.</div>
                 <div class="text-indigo-400 pt-1">☁️ 모든 데이터는 클라우드(Firebase)에 저장되어 어떤 기기/브라우저에서 열어도 동일하게 보여요.</div>
               </div>
 
@@ -2066,6 +2150,75 @@
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {suspectedChangedOrInactiveList.length > 0 && (
+                  <details class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <summary class="text-xs font-bold text-amber-700 cursor-pointer">
+                      ⚠️ 아이디 변경/비활성 추정으로 제외된 계정 ({suspectedChangedOrInactiveList.length}명)
+                    </summary>
+                    <div class="mt-2 space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {suspectedChangedOrInactiveList.map(username => (
+                        <div key={username} class="flex justify-between items-center text-xs bg-white p-2 rounded-lg border border-amber-100">
+                          <a
+                            href={`https://www.instagram.com/${username}/`}
+                            target="_blank"
+                            rel="noreferrer"
+                            class="font-semibold text-amber-700 hover:underline"
+                          >
+                            @{username}
+                          </a>
+                          <span class="text-[10px] text-slate-400">관리 목록에 있음</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+
+              {/* 🚫 아이디 변경/비활성 추정 계정 목록 관리 */}
+              <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
+                <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">
+                  🚫 아이디 변경/비활성 계정 목록 관리
+                </div>
+                <div class="text-[11px] text-slate-400">
+                  직접 걸러낸 아이디 목록을 JSON 파일로 올리면 중복을 제거하고 누적 저장해요. 이 목록에 있는 아이디는 "맞팔 확인" 결과에서 자동으로 빠져요.
+                </div>
+
+                <label
+                  onDragOver={handleIgExcludedDragOver}
+                  onDragLeave={handleIgExcludedDragLeave}
+                  onDrop={handleIgExcludedDrop}
+                  class={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition ${isIgExcludedDragging ? 'border-amber-400 bg-amber-100/60' : 'border-amber-200 hover:bg-amber-50/50'}`}
+                >
+                  <span class="text-2xl">📄</span>
+                  <span class="text-xs font-bold text-amber-600">
+                    {isIgExcludedDragging ? '여기에 놓으세요! 🎯' : '아이디 목록 JSON 파일 선택 또는 드래그 앤 드롭'}
+                  </span>
+                  <input type="file" accept=".json,application/json" multiple onChange={handleIgExcludedFileUpload} class="hidden" />
+                </label>
+
+                {igExcludedAccounts && igExcludedAccounts.usernames.length > 0 ? (
+                  <details class="bg-slate-50 rounded-xl p-3">
+                    <summary class="text-xs font-bold text-slate-600 cursor-pointer">📋 현재 관리 중인 아이디 ({igExcludedAccounts.usernames.length}개)</summary>
+                    <div class="mt-2 space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {[...igExcludedAccounts.usernames].sort().map(username => (
+                        <div key={username} class="flex justify-between items-center text-xs bg-white p-2 rounded-lg border border-slate-100">
+                          <span class="font-semibold text-slate-600">@{username}</span>
+                          <button
+                            onClick={() => handleRemoveExcludedAccount(username)}
+                            class="text-rose-500 hover:underline text-[11px] font-semibold"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  <div class="text-xs text-slate-400 text-center py-2">
+                    아직 등록된 아이디가 없습니다.
                   </div>
                 )}
               </div>
