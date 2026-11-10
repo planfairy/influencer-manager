@@ -1252,7 +1252,7 @@
               <h1 class="text-[26px] sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
                 🧚‍ 인플루언서 콘텐츠 초안 매니저
               </h1>
-              <p class="text-[11px] text-slate-400 font-semibold mt-1 tracking-wide">DRAFT · CAPTION · FOLLOW · REFERENCE</p>
+              <p class="text-[11px] text-slate-400 font-semibold mt-1 tracking-wide">DRAFT · CAPTION · REFERENCE</p>
             </div>
 
             {/* 탭 네비게이션 (5개 탭) */}
@@ -1276,12 +1276,6 @@
                 ✍️ 인스타 캡션 ({captionList.length})
               </button>
               <button
-                onClick={() => setActiveTab('follow')}
-                class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'follow' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
-              >
-                👥 팔로우 ({followList.length})
-              </button>
-              <button
                 onClick={() => setActiveTab('igTrack')}
                 class={`flex-1 py-2.5 px-2 font-bold rounded-xl whitespace-nowrap transition-all ${activeTab === 'igTrack' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25 scale-[1.02]' : 'text-slate-500 hover:bg-slate-100'}`}
               >
@@ -1295,22 +1289,6 @@
               </button>
             </div>
 
-            {activeTab === 'follow' && (
-              <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
-                <button
-                  onClick={() => setFollowSubTab('follow')}
-                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'follow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  📋 팔로우 관리
-                </button>
-                <button
-                  onClick={() => setFollowSubTab('unfollow')}
-                  class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${followSubTab === 'unfollow' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  🚫 언팔 관리
-                </button>
-              </div>
-            )}
           </div>
 
           {/* 기존 데이터 백업 이관 안내 배너 */}
@@ -1760,104 +1738,25 @@
           )}
 
           {/* TAB 4: 👥 팔로우 / 언팔 관리자 */}
-          {activeTab === 'follow' && (
+
+          {/* TAB 5: 🔍 인스타 언팔로우 추적 (로컬 전용) */}
+          {activeTab === 'igTrack' && (
             <div class="space-y-4">
-              {followSubTab === 'unfollow' && (
-                <>
-                <form onSubmit={handleAddUnfollow} class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3.5">
-                  <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">➕ 언팔 대상 계정 등록</div>
-                  <input
-                    type="text"
-                    placeholder="언팔 관리할 계정명 입력 (예: instagram)"
-                    value={unfollowUsernameInput}
-                    onChange={e => setUnfollowUsernameInput(e.target.value)}
-                    class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100 outline-none transition-all placeholder:text-slate-400"
-                  />
-                  <div class="flex gap-2 items-center">
-                    <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">등록일 지정:</span>
-                    <input
-                      type="text"
-                      placeholder="YYYY-MM-DD"
-                      value={unfollowDateInput}
-                      onChange={e => setUnfollowDateInput(e.target.value)}
-                      class="flex-1 border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100 outline-none transition-all"
-                    />
-                    <button
-                      type="submit"
-                      class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-xl transition shadow-md shadow-rose-500/25"
-                    >
-                      등록
-                    </button>
-                  </div>
-                </form>
+              <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-xs text-indigo-700 space-y-1">
+                <div class="font-bold">📥 사용 방법</div>
+                <div>1. 인스타그램 앱 → 설정 → 계정 센터 → 내 정보 및 권한 → 내 정보 내보내기 → 기기로 내보내기 → 정보 맞춤 설정(팔로워 및 팔로잉) → 형식 JSON으로 다운로드하세요.</div>
+                <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요. followers_2.json처럼 여러 개로 나뉘어 있다면 한꺼번에 선택하거나 드래그해서 올려도 자동으로 합쳐서 분석해요.</div>
+                <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
+                <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
+                <div>5. 아이디가 바뀌었거나 비활성화된 것으로 직접 확인한 계정은 맨 아래 "아이디 변경/비활성 계정 목록 관리"에 JSON으로 올려두면, 그 다음부터는 맞팔 확인 결과에서 자동으로 빠지고 별도 목록으로 모아서 보여드려요.</div>
+                <div>6. 맞팔 확인 목록에서 삭제 버튼을 누르면 "이미 확인한 계정"으로 자동 저장돼서, 나중에 following.json을 다시 올려도 같은 아이디는 다시 뜨지 않아요. 직접 모아둔 목록이 있으면 "이미 확인한 계정 관리"에 JSON으로 올려도 돼요.</div>
+                <div class="text-indigo-400 pt-1">☁️ 모든 데이터는 클라우드(Firebase)에 저장되어 어떤 기기/브라우저에서 열어도 동일하게 보여요.</div>
+              </div>
 
-                <div class="text-[13px] font-bold text-slate-700">📋 언팔 관리 목록 ({unfollowList.length})</div>
-
-                {groupedUnfollowData.length === 0 ? (
-                  <div class="bg-white p-10 text-center text-slate-400 text-sm rounded-2xl border border-slate-100">
-                    등록된 언팔 관리 계정이 없습니다. 🧚‍
-                  </div>
-                ) : (
-                  <div class="space-y-4">
-                    {groupedUnfollowData.map(group => (
-                      <div key={group.date} class="space-y-2">
-                        <div class="flex justify-between items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200 text-gray-700">
-                          <span>📅 {group.date} ({group.items.length}개)</span>
-                          <button
-                            onClick={() => handleDeleteUnfollowDateGroup(group.date, group.items)}
-                            class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold rounded-lg transition"
-                          >
-                            이 날짜 전체 삭제
-                          </button>
-                        </div>
-                        <div class="space-y-2">
-                          {group.items.map(item => (
-                            <div key={item.id} class="p-3 rounded-lg bg-white border border-gray-200 space-y-2">
-                              <div class="flex justify-between items-center">
-                                <span class="font-bold text-sm text-rose-600">@{item.username}</span>
-                              </div>
-                              <div class="flex flex-wrap gap-1.5 justify-end">
-                                <button
-                                  onClick={() => copyTextToClipboard(item.username)}
-                                  class="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded hover:bg-gray-200 transition"
-                                >
-                                  계정 복사
-                                </button>
-                                <button
-                                  onClick={() => copyTextToClipboard(item.url)}
-                                  class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
-                                >
-                                  링크 복사
-                                </button>
-                                <button
-                                  onClick={() => handleEditUnfollowDate(item)}
-                                  class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
-                                >
-                                  날짜 수정
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteUnfollow(item.id)}
-                                  class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-              )}
-
-              {followSubTab === 'follow' && (
-              <>
-              {/* 오늘의 추천 댓글 박스 */}
+              {/* 💬 오늘의 추천 댓글 (팔로우 탭에서 이동) */}
               <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-5 rounded-2xl shadow-sm border border-purple-200/70 space-y-2">
                 <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
-                  <span class="text-xs font-bold text-purple-700">💬 오늘의 MZ 추천 댓글 (수정 및 드래그 복사 가능)</span>
+                  <span class="text-xs font-bold text-purple-700">💬 오늘의 추천 댓글 (클릭하면 자동 복사)</span>
                 </div>
 
                 <div class="space-y-2 pt-1 text-xs max-h-56 overflow-y-auto pr-1">
@@ -1877,253 +1776,6 @@
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {/* 내 계정 수동 현황 카드 */}
-              <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-indigo-200 space-y-3.5">
-                {isEditingStats ? (
-                  <div class="space-y-2">
-                    <div class="text-xs font-bold text-slate-800">✏️ 내 계정 현황 수정</div>
-                    <input
-                      type="text"
-                      placeholder="내 인스타 계정명 (예: my_account)"
-                      value={myUsername}
-                      onChange={e => setMyUsername(e.target.value)}
-                      class="w-full border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50/70 focus:bg-white focus:border-indigo-400 outline-none transition-all"
-                    />
-                    <div class="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="팔로워 수"
-                        value={followersCount}
-                        onChange={e => setFollowersCount(e.target.value)}
-                        class="flex-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50/70 focus:bg-white focus:border-indigo-400 outline-none transition-all"
-                      />
-                      <input
-                        type="number"
-                        placeholder="팔로잉 수"
-                        value={followingCount}
-                        onChange={e => setFollowingCount(e.target.value)}
-                        class="flex-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50/70 focus:bg-white focus:border-indigo-400 outline-none transition-all"
-                      />
-                    </div>
-                    <button
-                      onClick={saveStats}
-                      class="w-full py-2.5 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition shadow-sm"
-                    >
-                      💾 저장하기
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div class="flex justify-between items-center mb-3">
-                      <span class="font-bold text-indigo-600 text-sm">
-                        {myUsername ? `@${myUsername.replace('@', '')}` : '내 계정 현황'}
-                      </span>
-                      <div class="flex gap-1.5">
-                        {myUsername && (
-                          <a
-                            href={`https://www.instagram.com/${myUsername.replace('@', '')}/`}
-                            target="_blank"
-                            rel="noreferrer"
-                            class="px-2.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 inline-block transition"
-                          >
-                            내 인스타 열기 ↗
-                          </a>
-                        )}
-                        <button
-                          onClick={() => setIsEditingStats(true)}
-                          class="px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
-                        >
-                          수치 수정
-                        </button>
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      <div>
-                        <div class="text-xs text-gray-500">팔로워</div>
-                        <div class="text-lg font-bold text-slate-800">{followersCount || '0'}</div>
-                      </div>
-                      <div class="border-l border-gray-200">
-                        <div class="text-xs text-gray-500">팔로잉</div>
-                        <div class="text-lg font-bold text-slate-800">{followingCount || '0'}</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 신규 계정 등록 입력 폼 */}
-              <form onSubmit={handleAddFollow} class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3.5">
-                <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">➕ 추적 계정 등록</div>
-                <input
-                  type="text"
-                  placeholder="추적할 계정명 입력 (예: instagram)"
-                  value={followUsernameInput}
-                  onChange={e => setFollowUsernameInput(e.target.value)}
-                  class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all placeholder:text-slate-400"
-                />
-                <div class="flex gap-2 items-center">
-                  <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">등록일 지정:</span>
-                  <input
-                    type="text"
-                    placeholder="YYYY-MM-DD"
-                    value={followDateInput}
-                    onChange={e => setFollowDateInput(e.target.value)}
-                    class="flex-1 border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50/70 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                  <button
-                    type="submit"
-                    class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition shadow-md shadow-indigo-500/25"
-                  >
-                    등록
-                  </button>
-                </div>
-              </form>
-
-              {/* 7일 경과 경고 섹션 */}
-              {dueFollowList.length > 0 && (
-                <div class="bg-rose-50 border border-rose-300 p-4 rounded-2xl shadow-sm space-y-2">
-                  <div class="text-xs font-bold text-rose-600">
-                    🚨 7일 경과! 언팔로우 점검 대상 ({dueFollowList.length})
-                  </div>
-                  <div class="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                    {dueFollowList.map(item => {
-                      const isClicked = clickedIds.includes(item.id);
-                      return (
-                        <div key={`due-${item.id}`} class="flex justify-between items-center text-xs bg-white p-2 rounded border border-rose-200">
-                          <button
-                            onClick={() => copyUsernameAndMark(item)}
-                            class={`font-semibold hover:underline text-left ${isClicked ? 'text-purple-600' : 'text-gray-800'}`}
-                          >
-                            @{item.username} <span class="text-gray-400 font-normal">({item.date})</span> {isClicked ? '✓ 복사됨' : ''}
-                          </button>
-                          <button
-                            onClick={() => copyUsernameAndMark(item)}
-                            class={`px-2 py-1 text-white font-bold rounded ${isClicked ? 'bg-purple-600 hover:bg-purple-700' : 'bg-rose-600 hover:bg-rose-700'}`}
-                          >
-                            {isClicked ? '복사됨' : '계정 복사'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 목록 타이틀 & 정렬 버튼 */}
-              <div class="flex justify-between items-center">
-                <div class="text-[13px] font-bold text-slate-700">📋 날짜별 목록</div>
-                <div class="flex bg-slate-100 p-1 rounded-xl">
-                  <button
-                    onClick={() => setSortOrder('newest')}
-                    class={`px-3 py-1 text-xs font-bold rounded transition ${sortOrder === 'newest' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-600'}`}
-                  >
-                    최신순
-                  </button>
-                  <button
-                    onClick={() => setSortOrder('oldest')}
-                    class={`px-3 py-1 text-xs font-bold rounded transition ${sortOrder === 'oldest' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-600'}`}
-                  >
-                    오래된순
-                  </button>
-                </div>
-              </div>
-
-              {/* 날짜별 그룹화 리스트 */}
-              {groupedFollowData.length === 0 ? (
-                <div class="bg-white p-10 text-center text-slate-400 text-sm rounded-2xl border border-slate-100">
-                  등록된 추적 계정이 없습니다. 🧚‍
-                </div>
-              ) : (
-                <div class="space-y-4">
-                  {groupedFollowData.map(group => {
-                    const days = getDaysDiff(group.date);
-                    const isOver7Days = days >= 7;
-
-                    return (
-                      <div key={group.date} class="space-y-2">
-                        <div class={`flex justify-between items-center px-3 py-1.5 rounded-lg text-xs font-bold ${isOver7Days ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-gray-200 text-gray-700'}`}>
-                          <span>
-                            📅 {group.date} ({days < 0 ? `${Math.abs(days)}일 후` : `${days}일 경과`}) {isOver7Days ? '⚠️ 7일 이상 경과' : ''} ({group.items.length}개)
-                          </span>
-                          <button
-                            onClick={() => handleDeleteDateGroup(group.date, group.items)}
-                            class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold rounded-lg transition"
-                          >
-                            이 날짜 전체 삭제
-                          </button>
-                        </div>
-
-                        <div class="space-y-2">
-                          {group.items.map(item => {
-                            const isClicked = clickedIds.includes(item.id);
-                            return (
-                              <div key={item.id} class={`p-3 rounded-lg bg-white border ${isOver7Days ? 'border-rose-400 bg-rose-50/40' : 'border-gray-200'} space-y-2`}>
-                                <div class="flex justify-between items-center">
-                                  <button
-                                    onClick={() => copyUsernameAndMark(item)}
-                                    class={`font-bold hover:underline text-sm text-left transition ${
-                                      isClicked ? 'text-purple-600 font-extrabold' : 'text-indigo-600'
-                                    }`}
-                                  >
-                                    @{item.username} {isClicked ? '✓ 복사됨' : ''}
-                                  </button>
-                                </div>
-                                <div class="flex flex-wrap gap-1.5 justify-end">
-                                  <button
-                                    onClick={() => copyUsernameAndMark(item)}
-                                    class={`px-2.5 py-1 font-semibold text-xs rounded transition ${
-                                      isClicked ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                  >
-                                    {isClicked ? '✓ 계정 복사됨' : '계정 복사'}
-                                  </button>
-                                  <button
-                                    onClick={() => copyTextToClipboard(item.url)}
-                                    class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
-                                  >
-                                    링크 복사
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditFollowDate(item)}
-                                    class="px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold text-xs rounded-lg hover:bg-slate-200 transition"
-                                  >
-                                    날짜 수정
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteFollow(item.id)}
-                                    class="px-2.5 py-1 bg-rose-50 text-rose-600 font-semibold text-xs rounded-lg hover:bg-rose-100 transition"
-                                  >
-                                    삭제
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              </>
-              )}
-            </div>
-          )}
-
-          {/* TAB 5: 🔍 인스타 언팔로우 추적 (로컬 전용) */}
-          {activeTab === 'igTrack' && (
-            <div class="space-y-4">
-              <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-xs text-indigo-700 space-y-1">
-                <div class="font-bold">📥 사용 방법</div>
-                <div>1. 인스타그램 앱 → 설정 → 계정 센터 → 내 정보 및 권한 → 내 정보 내보내기 → 기기로 내보내기 → 정보 맞춤 설정(팔로워 및 팔로잉) → 형식 JSON으로 다운로드하세요.</div>
-                <div>2. 압축을 풀면 나오는 followers_1.json 파일을 아래에 업로드하세요. followers_2.json처럼 여러 개로 나뉘어 있다면 한꺼번에 선택하거나 드래그해서 올려도 자동으로 합쳐서 분석해요.</div>
-                <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
-                <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
-                <div>5. 아이디가 바뀌었거나 비활성화된 것으로 직접 확인한 계정은 맨 아래 "아이디 변경/비활성 계정 목록 관리"에 JSON으로 올려두면, 그 다음부터는 맞팔 확인 결과에서 자동으로 빠지고 별도 목록으로 모아서 보여드려요.</div>
-                <div>6. 맞팔 확인 목록에서 삭제 버튼을 누르면 "이미 확인한 계정"으로 자동 저장돼서, 나중에 following.json을 다시 올려도 같은 아이디는 다시 뜨지 않아요. 직접 모아둔 목록이 있으면 "이미 확인한 계정 관리"에 JSON으로 올려도 돼요.</div>
-                <div class="text-indigo-400 pt-1">☁️ 모든 데이터는 클라우드(Firebase)에 저장되어 어떤 기기/브라우저에서 열어도 동일하게 보여요.</div>
               </div>
 
               <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
