@@ -131,6 +131,7 @@
       const [igUnfollowLog, setIgUnfollowLog] = useState([]);
       const [igFollowing, setIgFollowing] = useState(null);
       const [igExcludedAccounts, setIgExcludedAccounts] = useState(null);
+      const [igHandledAccounts, setIgHandledAccounts] = useState(null);
 
       // 내 계정 수치
       const [myUsername, setMyUsername] = useState('');
@@ -232,6 +233,11 @@
           setIgExcludedAccounts(doc.exists ? doc.data() : null);
         });
 
+        // 11. 🔍 이미 확인/처리한 계정 목록 (맞팔 확인에서 영구 제외)
+        const unsubIgHandled = db.collection('igHandledAccounts').doc('current').onSnapshot(doc => {
+          setIgHandledAccounts(doc.exists ? doc.data() : null);
+        });
+
         return () => {
           unsubPosts();
           unsubCaptions();
@@ -244,6 +250,7 @@
           unsubIgUnfollowLog();
           unsubIgFollowing();
           unsubIgExcluded();
+          unsubIgHandled();
         };
       }, []);
 
@@ -299,11 +306,14 @@
         const priorSnapshots = igSnapshots.filter(s => s.date !== today);
         const baseline = priorSnapshots.reduce((latest, s) => (!latest || s.date > latest.date) ? s : latest, null);
 
-        let newlyUnfollowed = [];
+        let missingFromBaseline = [];
         if (baseline) {
           const newSet = new Set(usernames);
-          newlyUnfollowed = baseline.followers.filter(u => !newSet.has(u));
+          missingFromBaseline = baseline.followers.filter(u => !newSet.has(u));
         }
+        // 아이디 변경/비활성으로 이미 확인된 계정은 실제 언팔로우가 아니므로 감지 목록에서 제외
+        const newlyUnfollowed = missingFromBaseline.filter(u => !igExcludedSet.has(u));
+        const excludedMatchCount = missingFromBaseline.length - newlyUnfollowed.length;
 
         await db.collection('igSnapshots').doc(today).set({ date: today, followers: usernames });
 
@@ -317,12 +327,14 @@
           })));
         }
 
+        const excludedNote = excludedMatchCount > 0 ? `\n(아이디 변경/비활성 목록에 있는 ${excludedMatchCount}명은 제외했어요)` : '';
+
         if (!baseline) {
           alert(`첫 팔로워 목록이 클라우드에 저장되었습니다! (${usernames.length}명)\n다음에 새 파일을 업로드하면 그때부터 언팔로우 감지가 시작됩니다.`);
         } else if (newlyUnfollowed.length > 0) {
-          alert(`🚨 ${newlyUnfollowed.length}명이 회원님을 언팔로우했습니다! (비교 기준일: ${baseline.date})`);
+          alert(`🚨 ${newlyUnfollowed.length}명이 회원님을 언팔로우했습니다! (비교 기준일: ${baseline.date})${excludedNote}`);
         } else {
-          alert('👍 이전 기록과 비교 결과, 언팔로우한 계정이 없습니다.');
+          alert(`👍 이전 기록과 비교 결과, 언팔로우한 계정이 없습니다.${excludedNote}`);
         }
       };
 
@@ -537,11 +549,86 @@
         });
       };
 
+      // ✅ 이미 확인/처리한 계정 목록 업로드 (직접 관리하는 JSON 목록, 중복 제거 후 누적 저장)
+      const processIgHandledFiles = (fileList) => {
+        const files = Array.from(fileList || []).filter(f => (f.name || '').toLowerCase().endsWith('.json'));
+        if (files.length === 0) {
+          alert('JSON 파일만 업로드할 수 있습니다.');
+          return;
+        }
+
+        Promise.all(files.map(readFileAsText)).then(async (contents) => {
+          let allUsernames = [];
+          let hadParseError = false;
+
+          contents.forEach(content => {
+            try {
+              const parsed = JSON.parse(content);
+              allUsernames = allUsernames.concat(extractInstagramUsernames(parsed));
+            } catch (err) {
+              hadParseError = true;
+            }
+          });
+
+          if (hadParseError) {
+            alert('일부 파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 파일인지 확인해 주세요.');
+          }
+
+          const newUsernames = [...new Set(allUsernames)];
+          if (newUsernames.length === 0) {
+            alert('아이디 목록을 찾을 수 없습니다. 파일 형식을 확인해 주세요.');
+            return;
+          }
+
+          const existingRaw = igHandledAccounts?.usernames || [];
+          const existing = existingRaw.map(u => u.trim().replace(/^@/, '').replace(/\/+$/, ''));
+          const merged = [...new Set([...existing, ...newUsernames])];
+          await db.collection('igHandledAccounts').doc('current').set({ usernames: merged });
+          alert(`이미 확인한 계정 목록이 저장되었습니다! (신규 ${newUsernames.filter(u => !existing.includes(u)).length}명 추가, 전체 ${merged.length}명)`);
+        });
+      };
+
+      const handleIgHandledFileUpload = (e) => {
+        processIgHandledFiles(e.target.files);
+        e.target.value = '';
+      };
+
+      const [isIgHandledDragging, setIsIgHandledDragging] = useState(false);
+
+      const handleIgHandledDragOver = (e) => {
+        e.preventDefault();
+        setIsIgHandledDragging(true);
+      };
+
+      const handleIgHandledDragLeave = (e) => {
+        e.preventDefault();
+        setIsIgHandledDragging(false);
+      };
+
+      const handleIgHandledDrop = (e) => {
+        e.preventDefault();
+        setIsIgHandledDragging(false);
+        processIgHandledFiles(e.dataTransfer.files);
+      };
+
+      const handleRemoveHandledAccount = async (username) => {
+        await db.collection('igHandledAccounts').doc('current').update({
+          usernames: firebase.firestore.FieldValue.arrayRemove(username)
+        });
+      };
+
       const handleRemoveNotFollowingBack = async (username) => {
         if (!igFollowing) return;
-        await db.collection('igFollowing').doc('current').update({
-          following: firebase.firestore.FieldValue.arrayRemove(username)
-        });
+        // 팔로잉 목록에서 제거하는 동시에, "이미 확인한 계정" 목록에도 영구 저장해서
+        // 나중에 following.json을 다시 올려도 같은 계정이 맞팔 확인에 또 뜨지 않게 함
+        const existingHandled = (igHandledAccounts?.usernames || []).map(u => u.trim().replace(/^@/, '').replace(/\/+$/, ''));
+        const mergedHandled = [...new Set([...existingHandled, username])];
+        await Promise.all([
+          db.collection('igFollowing').doc('current').update({
+            following: firebase.firestore.FieldValue.arrayRemove(username)
+          }),
+          db.collection('igHandledAccounts').doc('current').set({ usernames: mergedHandled })
+        ]);
       };
 
       const handleDeleteIgSnapshot = async (date) => {
@@ -939,12 +1026,15 @@
       const latestFollowersSnapshot = igSnapshots.length > 0 ? igSnapshots[igSnapshots.length - 1] : null;
       const latestFollowersSet = latestFollowersSnapshot ? new Set(latestFollowersSnapshot.followers) : null;
       const igExcludedSet = igExcludedAccounts ? new Set(igExcludedAccounts.usernames) : new Set();
+      const igHandledSet = igHandledAccounts ? new Set(igHandledAccounts.usernames) : new Set();
       const notFollowingBackRaw = (igFollowing && latestFollowersSet)
         ? igFollowing.following.filter(u => !latestFollowersSet.has(u))
         : [];
       // 아이디 변경/비활성으로 이미 확인된 계정은 맞팔 확인 목록에서 제외하고 별도 목록으로 분리
-      const notFollowingBackList = notFollowingBackRaw.filter(u => !igExcludedSet.has(u));
+      // 이미 확인/처리(삭제)한 계정은 following.json을 다시 올려도 영구적으로 다시 뜨지 않게 함
+      const notFollowingBackList = notFollowingBackRaw.filter(u => !igExcludedSet.has(u) && !igHandledSet.has(u));
       const suspectedChangedOrInactiveList = notFollowingBackRaw.filter(u => igExcludedSet.has(u));
+      const alreadyHandledMatchCount = notFollowingBackRaw.filter(u => igHandledSet.has(u) && !igExcludedSet.has(u)).length;
 
 
       // 초안 에디터 핸들러
@@ -2032,6 +2122,7 @@
                 <div>3. 이전에 업로드한 기록과 자동으로 비교해서 언팔로우한 계정을 알려드려요.</div>
                 <div>4. 같은 폴더의 following.json을 아래 "맞팔 확인" 칸에 업로드하면, 내가 팔로우하는데 나를 팔로우하지 않는 계정도 바로 볼 수 있어요.</div>
                 <div>5. 아이디가 바뀌었거나 비활성화된 것으로 직접 확인한 계정은 맨 아래 "아이디 변경/비활성 계정 목록 관리"에 JSON으로 올려두면, 그 다음부터는 맞팔 확인 결과에서 자동으로 빠지고 별도 목록으로 모아서 보여드려요.</div>
+                <div>6. 맞팔 확인 목록에서 삭제 버튼을 누르면 "이미 확인한 계정"으로 자동 저장돼서, 나중에 following.json을 다시 올려도 같은 아이디는 다시 뜨지 않아요. 직접 모아둔 목록이 있으면 "이미 확인한 계정 관리"에 JSON으로 올려도 돼요.</div>
                 <div class="text-indigo-400 pt-1">☁️ 모든 데이터는 클라우드(Firebase)에 저장되어 어떤 기기/브라우저에서 열어도 동일하게 보여요.</div>
               </div>
 
@@ -2136,11 +2227,15 @@
                 ) : notFollowingBackList.length === 0 ? (
                   <div class="p-6 text-center text-slate-400 text-sm rounded-xl border border-slate-100">
                     맞팔하지 않는 계정이 없습니다! 모두 맞팔 중이에요 🎉
+                    {alreadyHandledMatchCount > 0 && (
+                      <div class="text-[11px] mt-1">(이미 확인한 {alreadyHandledMatchCount}명은 숨겼어요)</div>
+                    )}
                   </div>
                 ) : (
                   <div class="space-y-2">
                     <div class="text-[11px] text-slate-400">
                       총 {notFollowingBackList.length}명이 나를 맞팔하지 않고 있어요 (팔로워 기준일: {latestFollowersSnapshot.date}) · 팔로우 취소했으면 삭제로 체크하세요
+                      {alreadyHandledMatchCount > 0 && ` · 이미 확인한 ${alreadyHandledMatchCount}명은 숨겼어요`}
                     </div>
                     <div class="max-h-72 overflow-y-auto space-y-1.5 pr-1">
                       {notFollowingBackList.map(username => (
@@ -2220,6 +2315,52 @@
                           <span class="font-semibold text-slate-600">@{username}</span>
                           <button
                             onClick={() => handleRemoveExcludedAccount(username)}
+                            class="text-rose-500 hover:underline text-[11px] font-semibold"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  <div class="text-xs text-slate-400 text-center py-2">
+                    아직 등록된 아이디가 없습니다.
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ 이미 확인/처리한 계정 목록 관리 */}
+              <div class="bg-white p-5 rounded-2xl shadow-[0_2px_14px_-4px_rgba(15,23,42,0.10)] border border-slate-100 space-y-3">
+                <div class="text-[13px] font-bold text-slate-700 border-b border-slate-100 pb-2.5 mb-0.5">
+                  ✅ 이미 확인한 계정 관리
+                </div>
+                <div class="text-[11px] text-slate-400">
+                  "맞팔 확인" 목록에서 삭제 버튼을 누르면 자동으로 여기 쌓여요. 이미 언팔 처리했거나 더 볼 필요 없다고 확인한 아이디를 JSON으로 올리면 중복을 제거하고 누적 저장하고, 그 다음부터는 following.json을 다시 올려도 "맞팔 확인" 결과에 다시 뜨지 않아요.
+                </div>
+
+                <label
+                  onDragOver={handleIgHandledDragOver}
+                  onDragLeave={handleIgHandledDragLeave}
+                  onDrop={handleIgHandledDrop}
+                  class={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition ${isIgHandledDragging ? 'border-emerald-400 bg-emerald-100/60' : 'border-emerald-200 hover:bg-emerald-50/50'}`}
+                >
+                  <span class="text-2xl">📄</span>
+                  <span class="text-xs font-bold text-emerald-600">
+                    {isIgHandledDragging ? '여기에 놓으세요! 🎯' : '아이디 목록 JSON 파일 선택 또는 드래그 앤 드롭'}
+                  </span>
+                  <input type="file" accept=".json,application/json" multiple onChange={handleIgHandledFileUpload} class="hidden" />
+                </label>
+
+                {igHandledAccounts && igHandledAccounts.usernames.length > 0 ? (
+                  <details class="bg-slate-50 rounded-xl p-3">
+                    <summary class="text-xs font-bold text-slate-600 cursor-pointer">📋 현재 관리 중인 아이디 ({igHandledAccounts.usernames.length}개)</summary>
+                    <div class="mt-2 space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {[...igHandledAccounts.usernames].sort().map(username => (
+                        <div key={username} class="flex justify-between items-center text-xs bg-white p-2 rounded-lg border border-slate-100">
+                          <span class="font-semibold text-slate-600">@{username}</span>
+                          <button
+                            onClick={() => handleRemoveHandledAccount(username)}
                             class="text-rose-500 hover:underline text-[11px] font-semibold"
                           >
                             삭제
